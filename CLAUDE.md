@@ -1,0 +1,112 @@
+# inkboard — Claude context
+
+Single-file whiteboard canvas app: `inkboard.html`. All logic, styles, and markup are in that one file.
+
+## Architecture
+
+- **State**: `const S = { objects, view, tool, color, sz, bg, sel, selSet, name }` — single global state object
+- **Rendering**: canvas-based, `paint()` → `drawObj()` per object; selection overlays drawn after
+- **History**: simple array-based undo/redo via `pushUndo()` / `hist.u` / `hist.r`
+- **Persistence**: IndexedDB for auto-save; file system API (`dirHandle`) for folder saves; PNG/JSON export
+
+## Object model
+
+Each object in `S.objects` has a `type` field: `pen | rect | ellipse | line | arrow | text`. Objects are plain JS objects — no classes. `clone()` deep-copies them, `moveObj()` translates them, `bbox()` returns their bounding box.
+
+## Selection model
+
+- `S.sel` — single selected object (for resize handles, property editing)
+- `S.selSet` — Set of objects for multi-selection
+- When `selSet.size > 1`, `sel` is null; when `selSet.size === 1` or 0, `sel` is the primary (or null)
+- `selArr()` returns `[...selSet]` if multi, else `[sel]` if single, else `[]`
+- Multi-select operations: delete, copy, paste, duplicate, move all use `selArr()`
+
+## Tools
+
+`select | pen | eraser | rect | ellipse | arrow | line | text | hand`
+
+Keybindings: V P E R O A L T H respectively.
+
+## Keyboard shortcuts implemented
+
+| Shortcut | Action |
+|---|---|
+| Ctrl+Z / Ctrl+Y | Undo / Redo |
+| Ctrl+A | Select all |
+| Ctrl+C / Ctrl+V | Copy / Paste selected |
+| Ctrl+D | Duplicate selected |
+| Ctrl+S / Ctrl+O | Save PNG / Open board |
+| Ctrl+0 | Reset view |
+| Ctrl+Delete | Clear board |
+| Delete / Backspace | Remove selected |
+| Alt+drag | Drag a copy |
+| [ / ] | Change tool size |
+| 1–6 | Set colour |
+| Space | Hold to pan |
+| Tab | Presenter mode |
+| Esc | Deselect / exit presenter |
+| ? | Help |
+
+## Drag modes
+
+`drag.mode`: `pan | draw | shape | erase | move | resize | marquee | connect`
+
+- `marquee`: rubber-band rect drawn on canvas while dragging empty space with select tool; on release selects all objects whose bbox overlaps the rect
+- `move` with `drag.moveAll`: set when moving within a multi-selection; each item's original position stored in `drag.moveAll` as `{ obj, snap }`
+- `connect`: started by dragging from a port handle on a selected rect; draws a draft arrow from that port; snaps endpoint to nearest port on any other rect within 40px; on release creates an arrow object if long enough (>8px); if dropped on empty space, auto-spawns a new mind map node at the endpoint (new node's west port aligns with arrow tip)
+
+## Port handles
+
+Port handles are the 4 blue dots at the N/E/S/W midpoints of a selected `rect` object, visible only when the select tool is active. Used to drag out arrow connections (Obsidian Canvas style).
+
+- `portsFor(o)` — returns `[{id, x, y}]` for the 4 midpoints of `o`'s bbox
+- `portAt(p)` — returns the port under world point `p` (tolerance 10/k), or null
+- `paintPorts(o)` — draws the 4 blue filled circles with white stroke
+- Cursor changes to `crosshair` when hovering a port
+
+## Curved arrows
+
+Arrow objects support an optional `cx, cy` control point (quadratic bezier). When absent the arrow is straight.
+
+- `arrowD(o)` — draws `Q cx cy` bezier path when control point exists; arrowhead tangent computed from (cx,cy)→(x2,y2)
+- `handlesFor(o)` for `arrow` type — adds `{id:'mid'}` handle at the control point (or geometric midpoint when straight)
+- Drag the mid handle (solid blue circle) to bend the arrow; drag it back near the geometric midpoint to straighten
+- `applyResize` h='mid' — sets `o.cx/cy` or deletes them when within 10px of straight midpoint
+- `hitEdge` for curved arrows — samples 20 points along the bezier
+- `bbox` includes cx,cy so selection/marquee works on curved arrows
+- `moveObj` propagates cx,cy offset when moving arrows
+- `nearestPortSnap(p, exclude)` — returns nearest `{id, x, y, obj}` port within 40 world-px on any rect except `exclude`, or null
+- During connect drag, endpoint snaps live to nearest port and a blue glow ring highlights the target rect
+- Arrows created via port-snap store `arrow.srcConn = { obj, port }` and `arrow.dstConn = { obj, port }` as direct object references
+- `updateConnectedArrows(movedObjs[])` — called during move drag; scans all arrows and updates x1/y1 or x2/y2 for any whose srcConn/dstConn points to a moved rect; uses `portsFor()` to get current port positions
+
+## Clipboard
+
+`clipboard` is an array of cloned objects (supports multi-select copy/paste). Paste offsets each by 24px.
+
+## Templates
+
+Templates panel is in the topright bar ("Templates" chip). Two templates available:
+
+### Kanban Column
+- Single empty column (200×420) — no pre-filled cards
+- Column outline (rect) + "Column" title text + horizontal divider line; all 3 share a `group: 'kb-...'` id so they move together
+- Colors: accent blue (`#3b6cf6`) for column chrome
+- Dragging an arrow from a kanban rect port to empty space auto-spawns a new linked kanban column at the tip
+- `makeKanban(cx?, cy?)` accepts optional world-coordinate center; defaults to `viewCenter()`
+
+### Mind Map Node
+- Single rectangular node (160×56) + "Main Topic" text — no pre-built branches
+- Both objects share a `group: 'mm-...'` id; moving the rect moves the text with it
+- Rect shows 4 connection ports (N/E/S/W midpoints) when selected with the select tool; drag from a port to create an arrow
+- Dropping an arrow on empty space auto-spawns a new linked node at the tip
+- `makeMindmap(cx?, cy?)` accepts optional world-coordinate center; defaults to `viewCenter()`
+
+### Stamp logic (`stampTemplate(objs)`)
+- Pushes undo snapshot, adds all objects, selects them all via `selSet`, switches to select tool, shows toast.
+- Colors in template objects are resolved at stamp time — they won't auto-adapt if the board theme changes later.
+
+## Color system
+
+Named colors (`'ink'`, `'accent'`, etc.) resolved at draw time via `resolveColor()`. Swatches in `SWATCHES[]`.
+`inkNow()` returns the current ink hex (white on dark canvas, black on light) — used in templates to match the board background at stamp time.

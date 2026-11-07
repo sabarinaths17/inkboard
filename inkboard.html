@@ -1,0 +1,1423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Inkboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2316161a'/%3E%3Ccircle cx='16' cy='8' r='3.2' fill='%233b6cf6'/%3E%3Cpath d='M16.5 14 Q17.5 20 16 26' stroke='white' stroke-width='3.5' stroke-linecap='round' fill='none'/%3E%3Cpath d='M12 26 L20 26' stroke='%233b6cf6' stroke-width='2.5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
+<style>
+:root{
+  --text:#1b1b1f;
+  --muted:#8b8b95;
+  --line:rgba(15,15,20,.09);
+  --accent:#3b6cf6;
+  --glass:rgba(255,255,255,.84);
+  --surface:#fff;
+  --ctl:#3a3a42;
+  --hover:var(--hover);
+  --on-bg:#1b1b1f;
+  --on-fg:#fff;
+  --muted2:var(--muted2);
+  --font:'Segoe UI Variable Text','Segoe UI',Inter,system-ui,-apple-system,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body.dark{--text:#f2f2f5;--muted:#9a9aa6;--muted2:#b8b8c2;--line:rgba(255,255,255,.1);--glass:rgba(34,34,41,.84);--surface:#222229;--ctl:#d9d9e0;--hover:rgba(255,255,255,.09);--on-bg:#f2f2f5;--on-fg:#1b1b1f}
+html,body{margin:0;height:100%;overflow:hidden;background:#fff;color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+.glass{
+  background:var(--glass);
+  -webkit-backdrop-filter:blur(16px) saturate(1.5);backdrop-filter:blur(16px) saturate(1.5);
+  border:1px solid var(--line);
+  box-shadow:0 1px 2px rgba(15,15,20,.04),0 10px 32px rgba(15,15,20,.09);
+  border-radius:18px;
+}
+.ui{transition:opacity .25s ease}
+body.present .ui{opacity:0;pointer-events:none}
+
+/* brand / name and the empty hint sit on the board, so they follow the board colour, not the UI theme */
+#brand,#empty{--text:#1b1b1f;--muted2:#55555f;--hover:rgba(15,15,20,.06)}
+body.boarddark #brand,body.boarddark #empty{--text:#f2f2f5;--muted2:#b8b8c2;--hover:rgba(255,255,255,.09)}
+#brand{position:fixed;top:18px;left:20px;display:flex;align-items:center;gap:10px}
+#brand .dot{width:10px;height:10px;border-radius:50%;background:var(--text)}
+#name{font:500 14px var(--font);color:var(--text);border:0;background:transparent;padding:6px 8px;border-radius:8px;width:220px;outline:none}
+#name:hover{background:var(--hover)}
+#name:focus{background:var(--hover)}
+
+/* top right */
+#topright{position:fixed;top:14px;right:16px;display:flex;align-items:center;gap:4px;padding:5px}
+.chip,.txt{font:500 13px var(--font);color:var(--ctl);background:transparent;border:0;border-radius:11px;padding:0 12px;height:34px;display:inline-flex;align-items:center;gap:7px;cursor:pointer;transition:background .15s}
+.chip:hover,.txt:hover{background:var(--hover)}
+.chip svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.chip span{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.primary{font:600 13px var(--font);color:var(--on-fg);background:var(--on-bg);border:0;border-radius:11px;padding:0 14px;height:34px;display:inline-flex;align-items:center;gap:8px;cursor:pointer;transition:transform .1s,opacity .15s}
+.primary:hover{opacity:.88}
+.primary:active{transform:scale(.97)}
+.primary svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.savewrap{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 10px);width:290px;padding:6px;display:flex;flex-direction:column;gap:2px}
+.menu[hidden]{display:none}
+.menu button{all:unset;box-sizing:border-box;cursor:pointer;padding:9px 12px;border-radius:11px;display:flex;flex-direction:column;gap:2px;font-family:var(--font)}
+.menu button:hover{background:var(--hover)}
+.menu b{font-weight:600;font-size:13px}
+.menu span{font-size:12px;color:var(--muted)}
+
+/* dock */
+#dock{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);width:max-content;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:3px;padding:6px 8px;max-width:calc(100vw - 24px)}
+.btn{position:relative;width:36px;height:36px;border-radius:11px;border:0;background:transparent;display:grid;place-items:center;color:var(--ctl);cursor:pointer;transition:background .15s,color .15s,transform .1s}
+.btn:hover{background:var(--hover)}
+.btn:active{transform:scale(.94)}
+.btn.on{background:var(--on-bg);color:var(--on-fg)}
+.btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.btn[data-tip]:hover::after,.sw[data-tip]:hover::after,.bg[data-tip]:hover::after{
+  content:attr(data-tip);position:absolute;bottom:calc(100% + 12px);left:50%;transform:translateX(-50%);
+  background:var(--on-bg);color:var(--on-fg);font:500 12px var(--font);padding:5px 9px;border-radius:8px;white-space:nowrap;pointer-events:none;z-index:9}
+.sep{width:1px;height:22px;background:var(--line);margin:0 6px}
+.sw{position:relative;width:22px;height:22px;margin:0 3px;border-radius:50%;border:0;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(15,15,20,.16);transition:transform .12s}
+.sw:hover{transform:scale(1.12)}
+.sw.on::before{content:"";position:absolute;inset:-5px;border-radius:50%;border:1.6px solid var(--text)}
+.wd{position:relative;width:30px;height:36px;border:0;background:transparent;border-radius:11px;cursor:pointer;display:grid;place-items:center}
+.wd:hover{background:var(--hover)}
+.wd i{display:block;border-radius:50%;background:var(--ctl)}
+.wd.on{background:var(--on-bg)}
+.wd.on i{background:var(--on-fg)}
+.bg{position:relative;width:20px;height:20px;margin:0 2px;border-radius:7px;border:0;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(15,15,20,.2)}
+.bg.on{box-shadow:inset 0 0 0 1px rgba(15,15,20,.2),0 0 0 2px var(--surface),0 0 0 3.5px var(--text)}
+
+/* misc */
+#empty{position:fixed;left:50%;top:44%;transform:translate(-50%,-50%);text-align:center;color:var(--muted);pointer-events:none;font-size:14px;line-height:1.9}
+#empty b{font-weight:600;color:var(--muted2)}
+#empty kbd{font:500 12px var(--font);background:var(--hover);border-radius:6px;padding:2px 7px;color:var(--muted2)}
+#empty.hide{opacity:0}
+#zoom{position:fixed;left:20px;bottom:30px;font:500 12px var(--font);color:var(--muted);background:var(--glass);padding:5px 9px;border-radius:9px;border:1px solid var(--line)}
+#toast{position:fixed;top:72px;left:50%;transform:translate(-50%,-8px);background:var(--on-bg);color:var(--on-fg);font:500 13px var(--font);padding:9px 16px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:20;box-shadow:0 8px 24px rgba(15,15,20,.25)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+.texted{position:fixed;margin:0;padding:0;border:0;background:transparent;resize:none;overflow:hidden;white-space:pre;outline:1px dashed rgba(59,108,246,.55);outline-offset:4px;font-weight:500;z-index:5}
+#help{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(10,10,14,.30);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+#help[hidden]{display:none}
+.helpcard{width:min(780px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;padding:20px 26px 24px;background:var(--surface)}
+.helphead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.helphead b{font:600 16px var(--font);color:var(--text)}
+.helpgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:22px 32px}
+.helpgrid h4{margin:0 0 6px;font:600 11px var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.helpgrid .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:5px 0;font-size:13px;color:var(--text)}
+.helpgrid kbd{font:500 12px var(--font);background:var(--hover);border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--ctl);white-space:nowrap}
+.helpnote{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;line-height:1.65;color:var(--muted)}
+body.dragover::after{content:"Drop a board (.png or .json) to open it";position:fixed;inset:14px;border:2px dashed var(--accent);border-radius:22px;background:rgba(59,108,246,.06);display:grid;place-items:center;font:600 18px var(--font);color:var(--accent);z-index:30}
+.tmplcard{all:unset;box-sizing:border-box;cursor:pointer;padding:11px 14px;border-radius:12px;display:flex;align-items:center;gap:14px;width:100%}
+.tmplcard:hover{background:var(--hover)}
+.tmplcard-thumb{width:62px;height:52px;border-radius:8px;border:1px solid var(--line);flex-shrink:0;display:block}
+.tmplcard-info{display:flex;flex-direction:column;gap:3px}
+.tmplcard-info b{font-weight:600;font-size:13px;color:var(--text);display:block}
+.tmplcard-info span{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="brand" class="ui">
+  <span class="dot"></span>
+  <input id="name" spellcheck="false" aria-label="Board name">
+</div>
+
+<div id="topright" class="ui glass">
+  <button id="themeBtn" class="btn" title="Light / dark mode"></button>
+  <button id="helpBtn" class="btn" title="Keyboard shortcuts ( ? )"></button>
+  <button id="folderBtn" class="chip" title="Choose the folder boards are saved to">
+    <svg viewBox="0 0 20 20"><path d="M3 6.5A1.5 1.5 0 014.5 5h3l1.5 1.5h6.5A1.5 1.5 0 0117 8v6.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 013 14.5z"/></svg>
+    <span id="folderLabel">Choose folder</span>
+  </button>
+  <div class="savewrap">
+    <button id="tmpBtn" class="chip" title="Insert a template">
+      <svg viewBox="0 0 20 20"><path d="M3 3h6v6H3zm0 8h6v6H3zm8-8h6v6h-6zm0 8h6v6h-6z"/></svg>
+      <span>Templates</span>
+    </button>
+    <div id="tmpMenu" class="glass menu" style="width:320px" hidden>
+      <button class="tmplcard" id="tmplKanban">
+        <svg class="tmplcard-thumb" viewBox="0 0 62 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="13" y="1" width="36" height="50" rx="2.5" stroke="#3b6cf6" stroke-width="1.3"/>
+          <line x1="13" y1="14" x2="49" y2="14" stroke="#3b6cf6" stroke-width="0.9"/>
+        </svg>
+        <div class="tmplcard-info"><b>Kanban Column</b><span>One blank column — duplicate to add more</span></div>
+      </button>
+      <button class="tmplcard" id="tmplMindmap">
+        <svg class="tmplcard-thumb" viewBox="0 0 62 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="10" y="17" width="42" height="18" rx="3" stroke="#3b6cf6" stroke-width="1.3"/>
+          <circle cx="31" cy="17" r="3" fill="#3b6cf6"/>
+          <circle cx="52" cy="26" r="3" fill="#3b6cf6"/>
+          <circle cx="31" cy="35" r="3" fill="#3b6cf6"/>
+          <circle cx="10" cy="26" r="3" fill="#3b6cf6"/>
+        </svg>
+        <div class="tmplcard-info"><b>Mind Map Node</b><span>Rect node with 4 arrow ports — drag to extend</span></div>
+      </button>
+    </div>
+  </div>
+  <button id="openBtn" class="txt" title="Open a board (Ctrl+O)">Open</button>
+  <button id="newBtn" class="txt" title="New board">New</button>
+  <div class="savewrap">
+    <button id="saveBtn" class="primary">Save <svg viewBox="0 0 12 12"><path d="M2.5 4.5L6 8l3.5-3.5"/></svg></button>
+    <div id="menu" class="glass menu" hidden>
+      <button data-save="png"><b>PNG</b><span>Opens in Paint, and re-editable here (Ctrl+S)</span></button>
+      <button data-save="png-t"><b>PNG, transparent</b><span>For layering over video in OBS or an editor</span></button>
+      <button data-save="svg"><b>SVG</b><span>Vector, for Figma, Canva, browsers</span></button>
+      <button data-save="json"><b>Board file</b><span>Small .inkboard.json backup</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="dock" class="ui glass"></div>
+
+<div id="empty" class="ui"><b>Start drawing</b><br>Press <kbd>P</kbd> for pen, <kbd>R</kbd> box, <kbd>A</kbd> arrow, <kbd>T</kbd> text<br><kbd>Tab</kbd> hides everything for recording<br><kbd>?</kbd> shows every shortcut</div>
+<div id="zoom" class="ui">100%</div>
+<div id="help" hidden><div class="helpcard glass" role="dialog" aria-label="Keyboard shortcuts"><div class="helphead"><b>Keyboard shortcuts</b><button id="helpClose" class="btn" title="Close ( Esc )"></button></div><div class="helpgrid" id="helpGrid"></div><div class="helpnote" id="helpNote"></div></div></div>
+<div id="toast"></div>
+<input type="file" id="file" accept=".png,.json" hidden>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+
+/* ---------- constants ---------- */
+const INK_DARK = '#1b1b1f', INK_LIGHT = '#f5f5f7';
+const FONT = "'Segoe UI Variable Text','Segoe UI',system-ui,-apple-system,Arial,sans-serif";
+const RADIUS = 12;
+const STROKES = [2, 4, 8, 14];
+const TEXTSIZES = [20, 28, 42, 64];
+const ERASERS = [14, 28, 48, 80]; // eraser diameter in screen pixels
+const DOT_PX = { stroke: [5, 7, 11, 17], eraser: [6, 10, 14, 18], text: [6, 10, 14, 18] };
+const SIZE_TITLE = { stroke: 'Thickness  ( [ and ] )', eraser: 'Eraser size  ( [ and ] )', text: 'Text size  ( [ and ] )' };
+const CHARCOAL = '#1c1c21', WHITE = '#ffffff';
+const SWATCHES = ['ink', '#e5484d', '#f08a24', '#2f9e6e', '#2f6fed', '#8b5cf6'];
+const BGS = [
+  { c: '#ffffff', label: 'White' },
+  { c: '#f6f1e7', label: 'Paper' },
+  { c: '#1c1c21', label: 'Charcoal' },
+  { c: '#00b140', label: 'Chroma green' },
+];
+const HAS_FS = !!window.showDirectoryPicker;
+
+const svgIcon = p => `<svg viewBox="0 0 20 20">${p}</svg>`;
+const ICON = {
+  select: svgIcon('<path d="M4.5 3.5l11 5.5-4.8 1.7L9 15.5z"/>'),
+  pen: svgIcon('<path d="M13.5 3.5l3 3L7 16l-4 1 1-4z"/>'),
+  eraser: svgIcon('<path d="M3.5 12.5l7-7.5 5.5 5-6 6.5H6z"/><path d="M9 17h8"/>'),
+  rect: svgIcon('<rect x="3.5" y="5" width="13" height="10" rx="2.5"/>'),
+  ellipse: svgIcon('<ellipse cx="10" cy="10" rx="7" ry="5.5"/>'),
+  arrow: svgIcon('<path d="M4 16L16 4M9 4h7v7"/>'),
+  line: svgIcon('<path d="M4 16L16 4"/>'),
+  text: svgIcon('<path d="M5 5.5V4h10v1.5M10 4v12M8 16h4"/>'),
+  hand: svgIcon('<path d="M10 3v14M3 10h14M10 3l-2 2M10 3l2 2M10 17l-2-2M10 17l2-2M3 10l2-2M3 10l2 2M17 10l-2-2M17 10l-2 2"/>'),
+  undo: svgIcon('<path d="M7 5L3.5 8.5 7 12M3.5 8.5H12a4.5 4.5 0 010 9H8"/>'),
+  redo: svgIcon('<path d="M13 5l3.5 3.5L13 12M16.5 8.5H8a4.5 4.5 0 000 9h4"/>'),
+  present: svgIcon('<path d="M3 7V4h3M14 4h3v3M17 13v3h-3M6 16H3v-3"/>'),
+  trash: svgIcon('<path d="M4.5 6h11M8 6V4.5h4V6M6 6l.6 9.2a1 1 0 001 .8h4.8a1 1 0 001-.8L14 6M8.5 9v4M11.5 9v4"/>'),
+  keyboard: svgIcon('<rect x="2.5" y="5" width="15" height="10" rx="2.2"/><path d="M5.5 8.2h.01M8.5 8.2h.01M11.5 8.2h.01M14.5 8.2h.01M6.5 11.8h7"/>'),
+  close: svgIcon('<path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/>'),
+  moon: svgIcon('<path d="M16 11.5A6.5 6.5 0 018.5 4 6.5 6.5 0 1016 11.5z"/>'),
+  sun: svgIcon('<circle cx="10" cy="10" r="3.5"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4"/>'),
+};
+const TOOLS = [
+  ['select', 'Select', 'V'], ['pen', 'Pen', 'P'], ['eraser', 'Eraser', 'E'],
+  ['rect', 'Box', 'R'], ['ellipse', 'Circle', 'O'], ['arrow', 'Arrow', 'A'],
+  ['line', 'Line', 'L'], ['text', 'Text', 'T'], ['hand', 'Pan', 'H'],
+];
+const KEYMAP = { v: 'select', p: 'pen', e: 'eraser', r: 'rect', o: 'ellipse', a: 'arrow', l: 'line', t: 'text', h: 'hand' };
+
+/* ---------- state ---------- */
+const S = {
+  objects: [], view: { x: 0, y: 0, k: 1 },
+  tool: 'pen', color: 'ink', sz: { stroke: 1, eraser: 1, text: 1 },
+  bg: '#ffffff', sel: null, selSet: new Set(), name: defaultName(),
+};
+const hist = { u: [], r: [] };
+let draft = null, drag = null, spaceDown = false, editing = null, hiddenObj = null, pending = null;
+let dirHandle = null, hoverText = null;
+const ptr = { x: 0, y: 0, on: false };
+
+function defaultName() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `board-${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+const r2 = n => Math.round(n * 100) / 100;
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const clone = o => JSON.parse(JSON.stringify(o));
+function lum(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return (0.2126 * (n >> 16 & 255) + 0.7152 * (n >> 8 & 255) + 0.0722 * (n & 255)) / 255;
+}
+const isDark = hex => lum(hex) < 0.4;
+const inkNow = () => isDark(S.bg) ? INK_LIGHT : INK_DARK;
+const resolveColor = c => c === 'ink' ? inkNow() : c;
+
+/* ---------- canvas ---------- */
+const cv = $('#cv'), ctx = cv.getContext('2d');
+const mctx = document.createElement('canvas').getContext('2d');
+let dpr = 1, raf = 0;
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(innerWidth * dpr);
+  cv.height = Math.round(innerHeight * dpr);
+  paint();
+}
+addEventListener('resize', resize);
+function render() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paint(); }); }
+
+/* ---------- geometry ---------- */
+function norm(o) { return { x: Math.min(o.x, o.x + o.w), y: Math.min(o.y, o.y + o.h), w: Math.abs(o.w), h: Math.abs(o.h) }; }
+function measure(o) {
+  mctx.font = `500 ${o.size}px ${FONT}`;
+  const lines = o.text.split('\n');
+  let w = 0; for (const l of lines) w = Math.max(w, mctx.measureText(l).width);
+  return { w, h: lines.length * o.size * 1.25 };
+}
+function bbox(o) {
+  const hw = (o.width || 0) / 2;
+  switch (o.type) {
+    case 'pen': {
+      let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
+      for (const [x, y] of o.pts) { a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); }
+      return { x: a - hw, y: b - hw, w: c - a + 2 * hw, h: d - b + 2 * hw };
+    }
+    case 'rect': case 'ellipse': { const n = norm(o); return { x: n.x - hw, y: n.y - hw, w: n.w + 2 * hw, h: n.h + 2 * hw }; }
+    case 'line': case 'arrow': {
+      const m = hw + (o.type === 'arrow' ? Math.max(14, o.width * 4.2) * 0.6 : 0);
+      let x1 = Math.min(o.x1, o.x2), y1 = Math.min(o.y1, o.y2);
+      let x2 = Math.max(o.x1, o.x2), y2 = Math.max(o.y1, o.y2);
+      if (o.cx != null) { x1 = Math.min(x1, o.cx); y1 = Math.min(y1, o.cy); x2 = Math.max(x2, o.cx); y2 = Math.max(y2, o.cy); }
+      return { x: x1 - m, y: y1 - m, w: x2 - x1 + 2 * m, h: y2 - y1 + 2 * m };
+    }
+    case 'text': { const m = measure(o); return { x: o.x, y: o.y, w: m.w, h: m.h }; }
+  }
+}
+function distSeg(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1, l = dx * dx + dy * dy;
+  let t = l ? ((px - x1) * dx + (py - y1) * dy) / l : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+function hitEdge(o, p, tol) {
+  const t = tol + (o.width || 0) / 2;
+  switch (o.type) {
+    case 'pen': {
+      const q = o.pts;
+      if (q.length === 1) return Math.hypot(p.x - q[0][0], p.y - q[0][1]) <= t;
+      for (let i = 1; i < q.length; i++) if (distSeg(p.x, p.y, q[i - 1][0], q[i - 1][1], q[i][0], q[i][1]) <= t) return true;
+      return false;
+    }
+    case 'line': case 'arrow':
+      if (o.cx != null) {
+        for (let i = 1; i <= 20; i++) {
+          const t0 = (i - 1) / 20, t1 = i / 20;
+          const qx0 = (1-t0)*(1-t0)*o.x1+2*(1-t0)*t0*o.cx+t0*t0*o.x2, qy0 = (1-t0)*(1-t0)*o.y1+2*(1-t0)*t0*o.cy+t0*t0*o.y2;
+          const qx1 = (1-t1)*(1-t1)*o.x1+2*(1-t1)*t1*o.cx+t1*t1*o.x2, qy1 = (1-t1)*(1-t1)*o.y1+2*(1-t1)*t1*o.cy+t1*t1*o.y2;
+          if (distSeg(p.x, p.y, qx0, qy0, qx1, qy1) <= t) return true;
+        }
+        return false;
+      }
+      return distSeg(p.x, p.y, o.x1, o.y1, o.x2, o.y2) <= t;
+    case 'rect': {
+      const b = norm(o);
+      const inside = p.x >= b.x - t && p.x <= b.x + b.w + t && p.y >= b.y - t && p.y <= b.y + b.h + t;
+      const core = p.x > b.x + t && p.x < b.x + b.w - t && p.y > b.y + t && p.y < b.y + b.h - t;
+      return inside && !core;
+    }
+    case 'ellipse': {
+      const b = norm(o), rx = b.w / 2, ry = b.h / 2;
+      if (!rx || !ry) return false;
+      const d = Math.hypot((p.x - b.x - rx) / rx, (p.y - b.y - ry) / ry);
+      return Math.abs(d - 1) * Math.min(rx, ry) <= t;
+    }
+    case 'text': { const b = bbox(o); return p.x >= b.x - tol && p.x <= b.x + b.w + tol && p.y >= b.y - tol && p.y <= b.y + b.h + tol; }
+  }
+  return false;
+}
+function hitInside(o, p) {
+  const b = norm(o);
+  if (o.type === 'rect') return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+  const rx = b.w / 2, ry = b.h / 2;
+  return rx && ry && Math.hypot((p.x - b.x - rx) / rx, (p.y - b.y - ry) / ry) < 1;
+}
+function textAt(p) {
+  for (let i = S.objects.length - 1; i >= 0; i--) {
+    const o = S.objects[i];
+    if (o.type !== 'text') continue;
+    const b = bbox(o);
+    if (p.x >= b.x - 4 && p.x <= b.x + b.w + 4 && p.y >= b.y - 4 && p.y <= b.y + b.h + 4) return o;
+  }
+  return null;
+}
+function pick(p) {
+  const tol = 8 / S.view.k;
+  for (let i = S.objects.length - 1; i >= 0; i--) if (hitEdge(S.objects[i], p, tol)) return S.objects[i];
+  for (let i = S.objects.length - 1; i >= 0; i--) {
+    const o = S.objects[i];
+    if ((o.type === 'rect' || o.type === 'ellipse') && hitInside(o, p)) return o;
+  }
+  return null;
+}
+function handlesFor(o) {
+  if (o.type === 'arrow') {
+    const mx = o.cx != null ? o.cx : (o.x1 + o.x2) / 2;
+    const my = o.cy != null ? o.cy : (o.y1 + o.y2) / 2;
+    return [{ id: 'p1', x: o.x1, y: o.y1 }, { id: 'mid', x: mx, y: my }, { id: 'p2', x: o.x2, y: o.y2 }];
+  }
+  if (o.type === 'line') return [{ id: 'p1', x: o.x1, y: o.y1 }, { id: 'p2', x: o.x2, y: o.y2 }];
+  if (o.type === 'rect' || o.type === 'ellipse') {
+    const b = norm(o);
+    return [{ id: 'nw', x: b.x, y: b.y }, { id: 'ne', x: b.x + b.w, y: b.y }, { id: 'sw', x: b.x, y: b.y + b.h }, { id: 'se', x: b.x + b.w, y: b.y + b.h }];
+  }
+  if (o.type === 'text') { const b = bbox(o); return [{ id: 'se', x: b.x + b.w, y: b.y + b.h }]; }
+  return [];
+}
+function handleAt(p) {
+  if (!S.sel) return null;
+  const tol = 10 / S.view.k;
+  for (const h of handlesFor(S.sel)) if (Math.hypot(p.x - h.x, p.y - h.y) <= tol) return h.id;
+  return null;
+}
+function applyResize(o, orig, h, p) {
+  if (o.type === 'text') {
+    // scale the font size by how far the corner handle moved from the text's top-left
+    const b = bbox(orig);
+    const f = Math.max(0.2, ((p.x - orig.x) / b.w + (p.y - orig.y) / b.h) / 2);
+    o.size = Math.max(8, Math.min(400, Math.round(orig.size * f)));
+    return;
+  }
+  if (o.type === 'line' || o.type === 'arrow') {
+    if (h === 'p1') { o.x1 = p.x; o.y1 = p.y; }
+    else if (h === 'p2') { o.x2 = p.x; o.y2 = p.y; }
+    else if (h === 'mid') {
+      const mx = (o.x1 + o.x2) / 2, my = (o.y1 + o.y2) / 2;
+      if (Math.hypot(p.x - mx, p.y - my) < 10) { delete o.cx; delete o.cy; }
+      else { o.cx = p.x; o.cy = p.y; }
+    }
+    return;
+  }
+  const b = norm(orig);
+  const fx = h.includes('w') ? b.x + b.w : b.x;
+  const fy = h.includes('n') ? b.y + b.h : b.y;
+  o.x = Math.min(fx, p.x); o.y = Math.min(fy, p.y);
+  o.w = Math.abs(p.x - fx); o.h = Math.abs(p.y - fy);
+}
+function moveObj(o, orig, dx, dy) {
+  switch (o.type) {
+    case 'pen': o.pts = orig.pts.map(([x, y]) => [x + dx, y + dy]); break;
+    case 'line': case 'arrow':
+      o.x1 = orig.x1 + dx; o.y1 = orig.y1 + dy; o.x2 = orig.x2 + dx; o.y2 = orig.y2 + dy;
+      if (orig.cx != null) { o.cx = orig.cx + dx; o.cy = orig.cy + dy; }
+      break;
+    default: o.x = orig.x + dx; o.y = orig.y + dy;
+  }
+}
+
+/* ---------- path builders (shared by canvas and SVG) ---------- */
+function penD(p) {
+  if (p.length < 3) return `M${r2(p[0][0])} ${r2(p[0][1])}` + p.slice(1).map(q => `L${r2(q[0])} ${r2(q[1])}`).join('');
+  let d = `M${r2(p[0][0])} ${r2(p[0][1])}`;
+  for (let i = 1; i < p.length - 1; i++) {
+    const mx = (p[i][0] + p[i + 1][0]) / 2, my = (p[i][1] + p[i + 1][1]) / 2;
+    d += `Q${r2(p[i][0])} ${r2(p[i][1])} ${r2(mx)} ${r2(my)}`;
+  }
+  const l = p[p.length - 1];
+  return d + `L${r2(l[0])} ${r2(l[1])}`;
+}
+function rectD(b) {
+  const r = Math.min(RADIUS, b.w / 2, b.h / 2), { x, y, w, h } = b;
+  return `M${r2(x + r)} ${r2(y)}H${r2(x + w - r)}A${r2(r)} ${r2(r)} 0 0 1 ${r2(x + w)} ${r2(y + r)}V${r2(y + h - r)}` +
+    `A${r2(r)} ${r2(r)} 0 0 1 ${r2(x + w - r)} ${r2(y + h)}H${r2(x + r)}A${r2(r)} ${r2(r)} 0 0 1 ${r2(x)} ${r2(y + h - r)}` +
+    `V${r2(y + r)}A${r2(r)} ${r2(r)} 0 0 1 ${r2(x + r)} ${r2(y)}Z`;
+}
+function arrowD(o) {
+  const L = Math.max(14, o.width * 4.2), s = Math.PI / 7;
+  if (o.cx != null) {
+    const a = Math.atan2(o.y2 - o.cy, o.x2 - o.cx);
+    const ax = o.x2 - L * Math.cos(a - s), ay = o.y2 - L * Math.sin(a - s);
+    const bx = o.x2 - L * Math.cos(a + s), by = o.y2 - L * Math.sin(a + s);
+    return `M${r2(o.x1)} ${r2(o.y1)}Q${r2(o.cx)} ${r2(o.cy)} ${r2(o.x2)} ${r2(o.y2)}M${r2(ax)} ${r2(ay)}L${r2(o.x2)} ${r2(o.y2)}L${r2(bx)} ${r2(by)}`;
+  }
+  const a = Math.atan2(o.y2 - o.y1, o.x2 - o.x1);
+  const ax = o.x2 - L * Math.cos(a - s), ay = o.y2 - L * Math.sin(a - s);
+  const bx = o.x2 - L * Math.cos(a + s), by = o.y2 - L * Math.sin(a + s);
+  return `M${r2(o.x1)} ${r2(o.y1)}L${r2(o.x2)} ${r2(o.y2)}M${r2(ax)} ${r2(ay)}L${r2(o.x2)} ${r2(o.y2)}L${r2(bx)} ${r2(by)}`;
+}
+
+/* ---------- drawing ---------- */
+function drawObj(c, o) {
+  c.strokeStyle = o.color; c.fillStyle = o.color;
+  c.lineWidth = o.width || 1; c.lineCap = 'round'; c.lineJoin = 'round';
+  switch (o.type) {
+    case 'pen':
+      if (o.pts.length === 1) { c.beginPath(); c.arc(o.pts[0][0], o.pts[0][1], o.width / 2, 0, Math.PI * 2); c.fill(); }
+      else c.stroke(new Path2D(penD(o.pts)));
+      break;
+    case 'rect': c.stroke(new Path2D(rectD(norm(o)))); break;
+    case 'ellipse': {
+      const n = norm(o);
+      c.beginPath(); c.ellipse(n.x + n.w / 2, n.y + n.h / 2, n.w / 2, n.h / 2, 0, 0, Math.PI * 2); c.stroke();
+      break;
+    }
+    case 'line': c.beginPath(); c.moveTo(o.x1, o.y1); c.lineTo(o.x2, o.y2); c.stroke(); break;
+    case 'arrow': c.stroke(new Path2D(arrowD(o))); break;
+    case 'text': {
+      c.font = `500 ${o.size}px ${FONT}`; c.textBaseline = 'top';
+      o.text.split('\n').forEach((l, i) => c.fillText(l, o.x, o.y + i * o.size * 1.25));
+      break;
+    }
+  }
+}
+function paint() {
+  const { x, y, k } = S.view;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = S.bg; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * x, dpr * y);
+  for (const o of S.objects) if (o !== hiddenObj) drawObj(ctx, o);
+  if (draft) drawObj(ctx, draft);
+  if (!editing && !document.body.classList.contains('present')) {
+    if (S.selSet.size > 1) paintMultiSel();
+    else if (S.sel) { paintSel(); if (S.sel.type === 'rect' && S.tool === 'select') paintPorts(S.sel); }
+    const pins = new Set();
+    if (S.sel && S.sel.type === 'text') pins.add(S.sel);
+    if (hoverText && S.objects.includes(hoverText)) pins.add(hoverText);
+    pins.forEach(paintPin);
+  }
+  if (drag && drag.mode === 'connect' && drag.snap) {
+    const { x, y, k } = S.view, o = drag.snap.obj, b = bbox(o);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.save(); ctx.lineWidth = 2; ctx.strokeStyle = '#3b6cf6';
+    ctx.shadowColor = '#3b6cf6'; ctx.shadowBlur = 8;
+    ctx.strokeRect(b.x * k + x - 5, b.y * k + y - 5, b.w * k + 10, b.h * k + 10);
+    ctx.restore();
+  }
+  if (drag && drag.mode === 'marquee') {
+    const { x, y, k } = S.view;
+    const rx = Math.min(drag.x0, drag.x1) * k + x, ry = Math.min(drag.y0, drag.y1) * k + y;
+    const rw = Math.abs(drag.x1 - drag.x0) * k, rh = Math.abs(drag.y1 - drag.y0) * k;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.save(); ctx.setLineDash([4, 3]); ctx.lineWidth = 1; ctx.strokeStyle = '#3b6cf6';
+    ctx.fillStyle = 'rgba(59,108,246,.06)'; ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeRect(rx, ry, rw, rh); ctx.restore();
+  }
+  if (S.tool === 'eraser' && ptr.on && !editing) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const rr = ERASERS[S.sz.eraser] / 2, dk = isDark(S.bg);
+    ctx.beginPath(); ctx.arc(ptr.x, ptr.y, rr, 0, Math.PI * 2);
+    ctx.fillStyle = dk ? 'rgba(255,255,255,.08)' : 'rgba(20,20,25,.06)'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = dk ? 'rgba(255,255,255,.75)' : 'rgba(20,20,25,.6)'; ctx.stroke();
+  }
+  syncSizeUI();
+  $('#zoom').textContent = Math.round(k * 100) + '%';
+}
+function paintSel() {
+  const o = S.sel, { x, y, k } = S.view, acc = '#3b6cf6';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (o.type !== 'line' && o.type !== 'arrow') {
+    const b = bbox(o);
+    ctx.setLineDash([5, 4]); ctx.lineWidth = 1; ctx.strokeStyle = acc;
+    ctx.strokeRect(b.x * k + x - 4, b.y * k + y - 4, b.w * k + 8, b.h * k + 8);
+    ctx.setLineDash([]);
+  }
+  for (const h of handlesFor(o)) {
+    ctx.beginPath(); ctx.arc(h.x * k + x, h.y * k + y, 5, 0, Math.PI * 2);
+    if (h.id === 'mid') {
+      ctx.fillStyle = acc; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+    } else {
+      ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = acc; ctx.stroke();
+    }
+  }
+}
+
+
+/* connection ports — midpoints of rect edges, used to drag out arrows */
+function portsFor(o) {
+  if (o.type !== 'rect') return [];
+  const b = bbox(o);
+  return [
+    { id: 'n', x: b.x + b.w / 2, y: b.y },
+    { id: 'e', x: b.x + b.w,     y: b.y + b.h / 2 },
+    { id: 's', x: b.x + b.w / 2, y: b.y + b.h },
+    { id: 'w', x: b.x,           y: b.y + b.h / 2 },
+  ];
+}
+function portAt(p) {
+  const o = S.sel;
+  if (!o || o.type !== 'rect') return null;
+  const tol = 10 / S.view.k;
+  for (const pt of portsFor(o)) if (Math.hypot(p.x - pt.x, p.y - pt.y) <= tol) return pt;
+  return null;
+}
+function paintPorts(o) {
+  const { x, y, k } = S.view;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  for (const p of portsFor(o)) {
+    ctx.beginPath(); ctx.arc(p.x * k + x, p.y * k + y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#3b6cf6'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+  }
+}
+function nearestPortSnap(p, exclude) {
+  const SNAP = 40;
+  let best = null, bestD = SNAP;
+  for (const o of S.objects) {
+    if (o === exclude || o.type !== 'rect') continue;
+    for (const pt of portsFor(o)) {
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      if (d < bestD) { bestD = d; best = { ...pt, obj: o }; }
+    }
+  }
+  return best;
+}
+function paintMultiSel() {
+  const { x, y, k } = S.view;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.save(); ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = '#3b6cf6';
+  for (const o of S.selSet) { const b = bbox(o); ctx.strokeRect(b.x * k + x - 4, b.y * k + y - 4, b.w * k + 8, b.h * k + 8); }
+  ctx.restore();
+}
+
+/* ---------- text pin (hover a text, grab the pin to select and move it) ---------- */
+function pinPos(o) {
+  const b = bbox(o), { x, y, k } = S.view;
+  return { x: b.x * k + x - 18, y: b.y * k + y - 18 };
+}
+function paintPin(o) {
+  const b = bbox(o), { x, y, k } = S.view, c = pinPos(o);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (o !== S.sel) {
+    ctx.save(); ctx.globalAlpha = 0.55; ctx.setLineDash([5, 4]); ctx.lineWidth = 1; ctx.strokeStyle = '#3b6cf6';
+    ctx.strokeRect(b.x * k + x - 4, b.y * k + y - 4, b.w * k + 8, b.h * k + 8);
+    ctx.restore();
+  }
+  ctx.save();
+  ctx.beginPath(); ctx.arc(c.x, c.y, 10, 0, Math.PI * 2);
+  ctx.fillStyle = '#3b6cf6'; ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2; ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(c.x - 5, c.y); ctx.lineTo(c.x + 5, c.y); ctx.moveTo(c.x, c.y - 5); ctx.lineTo(c.x, c.y + 5);
+  ctx.stroke();
+}
+function pinHitObj(e) {
+  const cands = [];
+  if (S.sel && S.sel.type === 'text') cands.push(S.sel);
+  if (hoverText && hoverText !== S.sel && S.objects.includes(hoverText)) cands.push(hoverText);
+  for (const o of cands) {
+    const c = pinPos(o);
+    if (Math.hypot(e.clientX - c.x, e.clientY - c.y) <= 13) return o;
+  }
+  return null;
+}
+const RESIZE_CURSOR = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', p1: 'move', p2: 'move', mid: 'grab' };
+function updateHover(e) {
+  if (editing || document.body.classList.contains('present')) return;
+  const px = e.clientX, py = e.clientY, { x, y, k } = S.view;
+  let found = null;
+  for (let i = S.objects.length - 1; i >= 0; i--) {
+    const o = S.objects[i];
+    if (o.type !== 'text') continue;
+    const b = bbox(o), l = b.x * k + x - 4, t = b.y * k + y - 4, r = l + b.w * k + 8, bt = t + b.h * k + 8;
+    if (px >= l - 30 && px <= r + 6 && py >= t - 30 && py <= bt + 6) { found = o; break; }
+  }
+  if (found !== hoverText) { hoverText = found; render(); }
+  if (spaceDown) return;
+  let cur = CURSORS[S.tool];
+  if (pinHitObj(e)) cur = 'move';
+  else if (S.sel) {
+    const wp = toWorld(e);
+    const h = handleAt(wp); if (h) cur = RESIZE_CURSOR[h] || cur;
+    else if (S.sel.type === 'rect' && S.tool === 'select' && portAt(wp)) cur = 'crosshair';
+  }
+  cv.style.cursor = cur;
+}
+
+/* ---------- history ---------- */
+const snap = () => JSON.stringify({ bg: S.bg, objects: S.objects });
+function pushUndo() { hist.u.push(snap()); if (hist.u.length > 100) hist.u.shift(); hist.r = []; }
+function restore(s) {
+  const d = JSON.parse(s);
+  S.objects = d.objects; S.bg = d.bg; S.sel = null; S.selSet = new Set();
+  syncUI(); changed();
+}
+function undo() { if (!hist.u.length) return; hist.r.push(snap()); restore(hist.u.pop()); }
+function redo() { if (!hist.r.length) return; hist.u.push(snap()); restore(hist.r.pop()); }
+function beginChange() { pending = snap(); }
+function markChanged() { if (pending) { hist.u.push(pending); hist.r = []; pending = null; } }
+
+let saveTimer;
+function changed() {
+  render();
+  $('#empty').classList.toggle('hide', S.objects.length > 0 || !!draft);
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem('inkboard:auto', JSON.stringify({ name: S.name, bg: S.bg, objects: S.objects, view: S.view })); } catch (e) {}
+  }, 400);
+}
+
+/* ---------- view ---------- */
+const toWorld = e => ({ x: (e.clientX - S.view.x) / S.view.k, y: (e.clientY - S.view.y) / S.view.k });
+function zoomAt(cx, cy, f) {
+  const v = S.view, nk = Math.max(0.1, Math.min(8, v.k * f)), r = nk / v.k;
+  v.x = cx - (cx - v.x) * r; v.y = cy - (cy - v.y) * r; v.k = nk;
+  render();
+}
+function contentBounds(pad = 48) {
+  if (!S.objects.length) return { x: 0, y: 0, w: 400, h: 300 };
+  let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
+  for (const o of S.objects) { const q = bbox(o); a = Math.min(a, q.x); b = Math.min(b, q.y); c = Math.max(c, q.x + q.w); d = Math.max(d, q.y + q.h); }
+  const w = Math.max(c - a, 64), h = Math.max(d - b, 64);
+  return { x: a - pad - (w - (c - a)) / 2, y: b - pad - (h - (d - b)) / 2, w: w + pad * 2, h: h + pad * 2 };
+}
+function fitView() {
+  if (!S.objects.length) { S.view = { x: 0, y: 0, k: 1 }; render(); return; }
+  const b = contentBounds(60);
+  const k = Math.min(1, innerWidth / b.w, (innerHeight - 80) / b.h);
+  S.view = { k, x: (innerWidth - b.w * k) / 2 - b.x * k, y: (innerHeight - b.h * k) / 2 - b.y * k };
+  render();
+}
+
+/* ---------- tools ---------- */
+const CURSORS = { select: 'default', pen: 'crosshair', eraser: 'none', rect: 'crosshair', ellipse: 'crosshair', line: 'crosshair', arrow: 'crosshair', text: 'text', hand: 'grab' };
+function setTool(t) {
+  if (editing) editing.commit();
+  S.tool = t;
+  if (t !== 'select') { S.sel = null; S.selSet = new Set(); }
+  cv.style.cursor = CURSORS[t];
+  syncUI(); render();
+}
+function setColor(c) {
+  S.color = c;
+  if (S.sel) { pushUndo(); S.sel.color = resolveColor(c); changed(); }
+  syncUI();
+}
+// The four size dots mean different things per tool: stroke thickness, eraser size, or text size.
+const catOf = () => S.sel ? (S.sel.type === 'text' ? 'text' : 'stroke') : S.tool === 'eraser' ? 'eraser' : S.tool === 'text' ? 'text' : 'stroke';
+function curIdx() {
+  const cat = catOf();
+  if (!S.sel) return S.sz[cat];
+  const arr = cat === 'text' ? TEXTSIZES : STROKES, v = cat === 'text' ? S.sel.size : S.sel.width;
+  let bi = 0; arr.forEach((a, i) => { if (Math.abs(a - v) < Math.abs(arr[bi] - v)) bi = i; });
+  return bi;
+}
+function setSize(i) {
+  i = Math.max(0, Math.min(3, i));
+  const cat = catOf();
+  if (S.sel) { pushUndo(); if (cat === 'text') S.sel.size = TEXTSIZES[i]; else S.sel.width = STROKES[i]; changed(); }
+  else S.sz[cat] = i;
+  syncSizeUI(true); render();
+}
+let sizeSig = '';
+function syncSizeUI(force) {
+  const cat = catOf(), idx = curIdx(), sig = cat + idx;
+  if (!force && sig === sizeSig) return;
+  sizeSig = sig;
+  dock.querySelectorAll('[data-size]').forEach(b => {
+    const i = +b.dataset.size, d = b.firstElementChild;
+    b.classList.toggle('on', i === idx);
+    b.title = SIZE_TITLE[cat];
+    d.style.width = d.style.height = DOT_PX[cat][i] + 'px';
+  });
+}
+function clearBoard() {
+  if (editing) editing.commit();
+  if (!S.objects.length) { toast('The board is already empty'); return; }
+  pushUndo(); S.objects = []; S.sel = null; hoverText = null;
+  changed(); toast('Board cleared. Ctrl+Z brings it back');
+}
+const HELP = [
+  ['Tools', [['V', 'Select and move'], ['P', 'Pen'], ['E', 'Eraser'], ['R', 'Box'], ['O', 'Circle'], ['A', 'Arrow'], ['L', 'Line'], ['T', 'Text'], ['H', 'Pan']]],
+  ['Draw', [['1 to 6', 'Colour'], ['[  ]', 'Size of the current tool'], ['Shift', 'Straight lines, perfect squares'], ['Space', 'Hold to pan'], ['Scroll', 'Zoom'], ['Ctrl 0', 'Reset view']]],
+  ['Board', [['Ctrl Z', 'Undo'], ['Ctrl Y', 'Redo'], ['Ctrl Delete', 'Clear the board'], ['Ctrl A', 'Select all'], ['Ctrl C', 'Copy selected'], ['Ctrl V', 'Paste copied'], ['Ctrl D', 'Duplicate selected'], ['Alt drag', 'Drag a copy of an element'], ['Delete', 'Remove selected'], ['Ctrl S', 'Save as PNG'], ['Ctrl O', 'Open a board']]],
+  ['Screen', [['Tab', 'Presenter mode (hides all UI)'], ['Esc', 'Leave presenter, deselect'], ['?', 'This window']]],
+];
+function buildHelp() {
+  $('#helpGrid').innerHTML = HELP.map(([t, rows]) => `<div><h4>${t}</h4>${rows.map(([k, d]) => `<div class="row"><span>${d}</span><kbd>${k}</kbd></div>`).join('')}</div>`).join('');
+  $('#helpNote').textContent = 'Text: hover any text to get a blue pin, with any tool active. Drag the pin to move it (hold Alt to drag a copy), click it to edit, and drag the small dot at the corner to resize. The size dots in the toolbar change the size of whichever tool is active, including the eraser.';
+}
+const openHelp = () => { $('#help').hidden = false; };
+const closeHelp = () => { $('#help').hidden = true; };
+function setBg(c) {
+  pushUndo();
+  const wasDark = isDark(S.bg), nowDark = isDark(c);
+  S.bg = c;
+  if (wasDark !== nowDark) {
+    const from = nowDark ? INK_DARK : INK_LIGHT, to = nowDark ? INK_LIGHT : INK_DARK;
+    for (const o of S.objects) if (o.color === from) o.color = to;
+  }
+  syncUI(); changed();
+}
+function togglePresent(force) {
+  const on = force === undefined ? !document.body.classList.contains('present') : force;
+  if (editing) editing.commit();
+  document.body.classList.toggle('present', on);
+  if (on) S.sel = null;
+  closeMenu(); render();
+}
+let clipboard = null;
+function selArr() { return S.selSet.size > 1 ? [...S.selSet] : (S.sel ? [S.sel] : []); }
+function bboxOverlaps(o, rx, ry, rw, rh) {
+  const b = bbox(o);
+  return b.x < rx + rw && b.x + b.w > rx && b.y < ry + rh && b.y + b.h > ry;
+}
+function copySelected() {
+  const items = selArr(); if (!items.length) return;
+  clipboard = items.map(clone);
+}
+function pasteClipboard() {
+  if (!clipboard || !clipboard.length) return;
+  pushUndo();
+  const newObjs = clipboard.map(o => { const n = clone(o); moveObj(n, clone(o), 24, 24); S.objects.push(n); return n; });
+  if (newObjs.length === 1) { S.sel = newObjs[0]; S.selSet = new Set(); }
+  else { S.selSet = new Set(newObjs); S.sel = null; }
+  changed();
+}
+function duplicate() {
+  const items = selArr(); if (!items.length) return;
+  pushUndo();
+  const newObjs = items.map(o => { const n = clone(o); moveObj(n, clone(o), 24, 24); S.objects.push(n); return n; });
+  if (newObjs.length === 1) { S.sel = newObjs[0]; S.selSet = new Set(); }
+  else { S.selSet = new Set(newObjs); S.sel = null; }
+  changed();
+}
+function deleteSel() {
+  const items = selArr(); if (!items.length) return;
+  pushUndo(); items.forEach(o => S.objects.splice(S.objects.indexOf(o), 1));
+  S.sel = null; S.selSet = new Set(); changed();
+}
+function newBoard() {
+  if (editing) editing.commit();
+  if (S.objects.length) pushUndo();
+  S.objects = []; S.sel = null; S.selSet = new Set(); S.name = defaultName(); $('#name').value = S.name;
+  S.view = { x: 0, y: 0, k: 1 }; changed(); toast('New board. Ctrl+Z brings the old one back.');
+}
+
+/* ---------- text editing ---------- */
+function startText(o, p) {
+  if (editing) editing.commit();
+  const size = o ? o.size : TEXTSIZES[S.sz.text];
+  const pos = o ? { x: o.x, y: o.y } : p;
+  const color = o ? o.color : resolveColor(S.color);
+  const ta = document.createElement('textarea');
+  ta.className = 'texted'; ta.wrap = 'off'; ta.rows = 1; ta.spellcheck = false; ta.value = o ? o.text : '';
+  document.body.appendChild(ta);
+  const fit = () => {
+    ta.style.height = 'auto'; ta.style.width = '4px';
+    ta.style.height = ta.scrollHeight + 'px'; ta.style.width = Math.max(40, ta.scrollWidth + 8) + 'px';
+  };
+  const { x, y, k } = S.view;
+  Object.assign(ta.style, {
+    left: pos.x * k + x + 'px', top: pos.y * k + y + 'px', fontSize: size * k + 'px',
+    lineHeight: size * 1.25 * k + 'px', color, caretColor: color, fontFamily: FONT,
+  });
+  fit();
+  let done = false;
+  const commit = () => {
+    if (done) return; done = true;
+    const text = ta.value.replace(/\s+$/, '');
+    ta.remove(); editing = null; hiddenObj = null;
+    if (o) {
+      if (!text) { pushUndo(); S.objects.splice(S.objects.indexOf(o), 1); S.sel = null; }
+      else if (text !== o.text) { pushUndo(); o.text = text; }
+    } else if (text) {
+      pushUndo(); S.objects.push({ type: 'text', x: pos.x, y: pos.y, text, size, color });
+    }
+    changed();
+  };
+  ta.addEventListener('input', fit);
+  ta.addEventListener('blur', commit);
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); ta.blur(); }
+  });
+  editing = { commit }; hiddenObj = o || null; render();
+  setTimeout(() => ta.focus(), 0);
+}
+
+/* ---------- pointer ---------- */
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  if (editing) editing.commit();
+  closeMenu();
+  cv.setPointerCapture(e.pointerId);
+  const p = toWorld(e);
+  if (e.button === 0) {
+    // text pin and resize handles win over every tool, including Pan
+    const pinO = pinHitObj(e);
+    if (pinO) {
+      S.sel = pinO;
+      drag = { mode: 'move', x0: p.x, y0: p.y, orig: clone(pinO), sx: e.clientX, sy: e.clientY, viaPin: true, moved: false, dup: e.altKey };
+      beginChange(); render(); return;
+    }
+    const hh = S.sel ? handleAt(p) : null;
+    if (hh) { drag = { mode: 'resize', h: hh, orig: clone(S.sel) }; beginChange(); return; }
+  }
+  if (e.button === 1 || spaceDown || S.tool === 'hand') {
+    drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: S.view.x, vy: S.view.y };
+    cv.style.cursor = 'grabbing'; return;
+  }
+  if (e.button !== 0) return;
+  if (S.sel && S.tool !== 'select') { S.sel = null; render(); }
+  const col = resolveColor(S.color);
+  switch (S.tool) {
+    case 'pen':
+      draft = { type: 'pen', pts: [[p.x, p.y]], color: col, width: STROKES[S.sz.stroke] };
+      drag = { mode: 'draw' }; changed(); break;
+    case 'rect': case 'ellipse':
+      draft = { type: S.tool, x: p.x, y: p.y, w: 0, h: 0, color: col, width: STROKES[S.sz.stroke] };
+      drag = { mode: 'shape', x0: p.x, y0: p.y }; break;
+    case 'line': case 'arrow':
+      draft = { type: S.tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y, color: col, width: STROKES[S.sz.stroke] };
+      drag = { mode: 'shape', x0: p.x, y0: p.y }; break;
+    case 'text': { const t = textAt(p); if (t) startText(t); else startText(null, p); break; }
+    case 'eraser':
+      beginChange(); drag = { mode: 'erase', last: p }; eraseAt(p); break;
+    case 'select': {
+      const h = handleAt(p);
+      if (h) { drag = { mode: 'resize', h, orig: clone(S.sel) }; beginChange(); break; }
+      const pt = portAt(p);
+      if (pt) {
+        const col = resolveColor(S.color);
+        draft = { type: 'arrow', x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y, color: col, width: STROKES[S.sz.stroke] };
+        drag = { mode: 'connect', src: S.sel, srcPort: pt.id, snap: null }; beginChange(); break;
+      }
+      const o = pick(p);
+      if (o) {
+        if (S.selSet.size > 1 && S.selSet.has(o)) {
+          drag = { mode: 'move', x0: p.x, y0: p.y, orig: clone(o), sx: e.clientX, sy: e.clientY, dup: e.altKey, moveAll: [...S.selSet].map(x => ({ obj: x, snap: clone(x) })) };
+        } else if (o.group) {
+          const grp = S.objects.filter(x => x.group === o.group);
+          const rect = grp.find(x => x.type === 'rect') || o;
+          S.sel = rect; S.selSet = new Set();
+          drag = { mode: 'move', x0: p.x, y0: p.y, moveAll: grp.map(x => ({ obj: x, snap: clone(x) })), sx: e.clientX, sy: e.clientY, dup: e.altKey };
+        } else {
+          S.sel = o; S.selSet = new Set();
+          drag = { mode: 'move', x0: p.x, y0: p.y, orig: clone(o), sx: e.clientX, sy: e.clientY, dup: e.altKey };
+        }
+        beginChange(); break;
+      }
+      S.sel = null; S.selSet = new Set();
+      drag = { mode: 'marquee', x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+      render(); break;
+    }
+  }
+});
+// Pen strokes are wiped away only where the eraser touches them (the stroke splits in two).
+// Shapes and text are removed whole when the eraser touches them.
+function erasePen(o, p, r) {
+  const q = o.pts, hr = r + o.width / 2;
+  if (q.length === 1) return Math.hypot(p.x - q[0][0], p.y - q[0][1]) <= hr ? [] : null;
+  let touched = false;
+  for (let i = 1; i < q.length; i++) if (distSeg(p.x, p.y, q[i - 1][0], q[i - 1][1], q[i][0], q[i][1]) <= hr) { touched = true; break; }
+  if (!touched) return null;
+  // add points along segments near the eraser, so a quick swipe can't jump over them
+  const step = Math.max(1, r / 2), pts = [q[0]];
+  for (let i = 1; i < q.length; i++) {
+    const [x0, y0] = q[i - 1], [x1, y1] = q[i];
+    if (distSeg(p.x, p.y, x0, y0, x1, y1) <= hr + step) {
+      const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / step);
+      for (let j = 1; j < n; j++) pts.push([x0 + (x1 - x0) * j / n, y0 + (y1 - y0) * j / n]);
+    }
+    pts.push(q[i]);
+  }
+  const out = []; let run = [], removed = false;
+  const flush = () => { if (run.length > 1) out.push({ type: 'pen', pts: run, color: o.color, width: o.width }); run = []; };
+  for (const pt of pts) {
+    if (Math.hypot(pt[0] - p.x, pt[1] - p.y) <= hr) { removed = true; flush(); } else run.push(pt);
+  }
+  flush();
+  return removed ? out : null;
+}
+function eraseAt(p) {
+  const r = ERASERS[S.sz.eraser] / 2 / S.view.k;
+  for (let i = S.objects.length - 1; i >= 0; i--) {
+    const o = S.objects[i];
+    if (o.type === 'pen') {
+      const parts = erasePen(o, p, r);
+      if (parts) { markChanged(); S.objects.splice(i, 1, ...parts); if (S.sel === o) S.sel = null; changed(); }
+    } else if (hitEdge(o, p, r)) { markChanged(); S.objects.splice(i, 1); changed(); }
+  }
+}
+cv.addEventListener('pointermove', e => {
+  ptr.x = e.clientX; ptr.y = e.clientY; ptr.on = true;
+  if (S.tool === 'eraser') render();
+  if (!drag) { updateHover(e); return; }
+  const p = toWorld(e);
+  switch (drag.mode) {
+    case 'pan': S.view.x = drag.vx + e.clientX - drag.sx; S.view.y = drag.vy + e.clientY - drag.sy; render(); break;
+    case 'draw': {
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      const minD = 1.2 / S.view.k;
+      for (const ev of (evs.length ? evs : [e])) {
+        const q = toWorld(ev), l = draft.pts[draft.pts.length - 1];
+        if (Math.hypot(q.x - l[0], q.y - l[1]) >= minD) draft.pts.push([q.x, q.y]);
+      }
+      render(); break;
+    }
+    case 'shape': {
+      if (draft.type === 'rect' || draft.type === 'ellipse') {
+        let w = p.x - drag.x0, h = p.y - drag.y0;
+        if (e.shiftKey) { const m = Math.max(Math.abs(w), Math.abs(h)); w = Math.sign(w || 1) * m; h = Math.sign(h || 1) * m; }
+        draft.x = drag.x0; draft.y = drag.y0; draft.w = w; draft.h = h;
+      } else {
+        let dx = p.x - drag.x0, dy = p.y - drag.y0;
+        if (e.shiftKey) { const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * Math.PI / 4, l = Math.hypot(dx, dy); dx = l * Math.cos(a); dy = l * Math.sin(a); }
+        draft.x2 = drag.x0 + dx; draft.y2 = drag.y0 + dy;
+      }
+      render(); break;
+    }
+    case 'erase': {
+      const l = drag.last || p, r = ERASERS[S.sz.eraser] / 2 / S.view.k;
+      const n = Math.max(1, Math.ceil(Math.hypot(p.x - l.x, p.y - l.y) / (r / 2)));
+      for (let j = 1; j <= n; j++) eraseAt({ x: l.x + (p.x - l.x) * j / n, y: l.y + (p.y - l.y) * j / n });
+      drag.last = p; break;
+    }
+    case 'connect': if (draft) {
+      const sn = nearestPortSnap(p, drag.src);
+      draft.x2 = sn ? sn.x : p.x; draft.y2 = sn ? sn.y : p.y;
+      drag.snap = sn || null; render();
+    } break;
+    case 'marquee': drag.x1 = p.x; drag.y1 = p.y; render(); break;
+    case 'move':
+      if (drag.viaPin && !drag.moved) { if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return; drag.moved = true; }
+      if (drag.dup) {   // Alt+drag: the original stays, a copy is dragged away
+        if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
+        drag.dup = false; const n = clone(drag.orig); S.objects.push(n); S.sel = n;
+      }
+      markChanged();
+      if (drag.moveAll) {
+        const dx = p.x - drag.x0, dy = p.y - drag.y0;
+        drag.moveAll.forEach(({ obj, snap }) => moveObj(obj, snap, dx, dy));
+        const movedRects = drag.moveAll.map(({ obj }) => obj).filter(o => o.type === 'rect');
+        if (movedRects.length) updateConnectedArrows(movedRects);
+      } else {
+        moveObj(S.sel, drag.orig, p.x - drag.x0, p.y - drag.y0);
+        if (S.sel && S.sel.type === 'rect') updateConnectedArrows([S.sel]);
+      }
+      changed(); break;
+    case 'resize': markChanged(); applyResize(S.sel, drag.orig, drag.h, p); changed(); break;
+  }
+});
+function updateConnectedArrows(movedObjs) {
+  for (const arrow of S.objects) {
+    if (arrow.type !== 'arrow') continue;
+    if (arrow.srcConn && movedObjs.includes(arrow.srcConn.obj)) {
+      const pt = portsFor(arrow.srcConn.obj).find(p => p.id === arrow.srcConn.port);
+      if (pt) { arrow.x1 = pt.x; arrow.y1 = pt.y; }
+    }
+    if (arrow.dstConn && movedObjs.includes(arrow.dstConn.obj)) {
+      const pt = portsFor(arrow.dstConn.obj).find(p => p.id === arrow.dstConn.port);
+      if (pt) { arrow.x2 = pt.x; arrow.y2 = pt.y; }
+    }
+  }
+}
+function endDrag() {
+  if (!drag) return;
+  if (drag.mode === 'connect') {
+    if (draft && Math.hypot(draft.x2 - draft.x1, draft.y2 - draft.y1) > 8) {
+      if (drag.src) draft.srcConn = { obj: drag.src, port: drag.srcPort };
+      if (drag.snap) draft.dstConn = { obj: drag.snap.obj, port: drag.snap.id };
+      pushUndo(); S.objects.push(draft);
+      if (!drag.snap && drag.src && drag.src.group) {
+        const grp = drag.src.group;
+        if (grp.startsWith('mm-')) {
+          const newObjs = makeMindmap(draft.x2 + 80, draft.y2);
+          newObjs.forEach(o => S.objects.push(o));
+          const newRect = newObjs.find(o => o.type === 'rect');
+          if (newRect) { draft.dstConn = { obj: newRect, port: 'w' }; }
+          S.selSet = new Set(newObjs); S.sel = null;
+          S.tool = 'select'; syncUI();
+          toast('New node added — drag to reposition');
+        } else if (grp.startsWith('kb-')) {
+          const CW = 200, CH = 420;
+          const newObjs = makeKanban(draft.x2 + CW / 2, draft.y2);
+          newObjs.forEach(o => S.objects.push(o));
+          const newRect = newObjs.find(o => o.type === 'rect');
+          if (newRect) { draft.dstConn = { obj: newRect, port: 'w' }; }
+          S.selSet = new Set(newObjs); S.sel = null;
+          S.tool = 'select'; syncUI();
+          toast('New column added — drag to reposition');
+        }
+      }
+    }
+    draft = null; drag = null; pending = null;
+    cv.style.cursor = CURSORS.select; changed(); return;
+  }
+  if (drag.mode === 'marquee') {
+    const mx = Math.min(drag.x0, drag.x1), my = Math.min(drag.y0, drag.y1);
+    const mw = Math.abs(drag.x1 - drag.x0), mh = Math.abs(drag.y1 - drag.y0);
+    if (mw > 4 || mh > 4) {
+      const found = S.objects.filter(o => bboxOverlaps(o, mx, my, mw, mh));
+      if (found.length === 1) { S.sel = found[0]; S.selSet = new Set(); }
+      else if (found.length > 1) { S.selSet = new Set(found); S.sel = null; }
+    }
+    draft = null; drag = null; pending = null;
+    cv.style.cursor = spaceDown ? 'grab' : CURSORS[S.tool];
+    changed(); return;
+  }
+  if (drag.mode === 'move' && drag.viaPin && !drag.moved) {   // a click on the pin (no drag) edits the text
+    const o = S.sel; draft = null; drag = null; pending = null;
+    cv.style.cursor = spaceDown ? 'grab' : CURSORS[S.tool];
+    changed(); if (o) startText(o); return;
+  }
+  if (drag.mode === 'draw' && draft) { pushUndo(); S.objects.push(draft); }
+  if (drag.mode === 'shape' && draft) {
+    const big = draft.type === 'rect' || draft.type === 'ellipse'
+      ? Math.abs(draft.w) > 3 || Math.abs(draft.h) > 3
+      : Math.hypot(draft.x2 - draft.x1, draft.y2 - draft.y1) > 3;
+    if (big) {
+      if (draft.type === 'rect' || draft.type === 'ellipse') Object.assign(draft, norm(draft));
+      pushUndo(); S.objects.push(draft);
+    }
+  }
+  draft = null; drag = null; pending = null;
+  cv.style.cursor = spaceDown ? 'grab' : CURSORS[S.tool];
+  changed();
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+cv.addEventListener('pointerleave', () => { ptr.on = false; if (!drag) hoverText = null; render(); });
+cv.addEventListener('dblclick', e => {
+  const o = S.tool === 'select' ? pick(toWorld(e)) : null;
+  if (o && o.type === 'text') { S.sel = o; startText(o); }
+});
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (editing) editing.commit();
+  zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0015));
+}, { passive: false });
+
+/* ---------- keyboard ---------- */
+addEventListener('keydown', e => {
+  const inField = /INPUT|TEXTAREA/.test(e.target.tagName);
+  const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+  if (mod && (k === 's' || k === 'o')) { e.preventDefault(); k === 's' ? save('png') : openFile(); return; }
+  if (inField) { if (e.key === 'Enter' && e.target.id === 'name') e.target.blur(); return; }
+  if (!$('#help').hidden) { if (e.key === 'Escape' || e.key === '?' || (e.code === 'Slash' && e.shiftKey)) closeHelp(); return; }
+  if (mod) {
+    if (k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+    else if (k === 'y') { e.preventDefault(); redo(); }
+    else if (k === 'a') { e.preventDefault(); if (S.objects.length) { S.selSet = new Set(S.objects); S.sel = null; render(); } }
+    else if (k === 'c') { e.preventDefault(); copySelected(); }
+    else if (k === 'v') { e.preventDefault(); pasteClipboard(); }
+    else if (k === 'd') { e.preventDefault(); duplicate(); }
+    else if (k === '0') { e.preventDefault(); S.view = { x: 0, y: 0, k: 1 }; render(); }
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); clearBoard(); }
+    return;
+  }
+  if (e.key === 'Tab') { e.preventDefault(); togglePresent(); return; }
+  if (e.key === '?' || (e.code === 'Slash' && e.shiftKey)) { openHelp(); return; }
+  if (e.key === 'Escape') { if (document.body.classList.contains('present')) togglePresent(false); else { S.sel = null; S.selSet = new Set(); closeMenu(); render(); } return; }
+  if (e.code === 'Space') { e.preventDefault(); if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; } return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSel(); return; }
+  if (e.key === '[') { setSize(curIdx() - 1); return; }
+  if (e.key === ']') { setSize(curIdx() + 1); return; }
+  if (/^[1-6]$/.test(e.key)) { setColor(SWATCHES[+e.key - 1]); return; }
+  if (KEYMAP[k]) setTool(KEYMAP[k]);
+});
+addEventListener('keyup', e => {
+  if (e.code === 'Space') { spaceDown = false; if (!drag) cv.style.cursor = CURSORS[S.tool]; }
+});
+
+/* ---------- UI build ---------- */
+const dock = $('#dock');
+function build() {
+  const add = (html) => dock.insertAdjacentHTML('beforeend', html);
+  TOOLS.forEach(([id, label, key]) => add(`<button class="btn" data-tool="${id}" data-tip="${label}  ${key}">${ICON[id]}</button>`));
+  add('<span class="sep"></span>');
+  SWATCHES.forEach((c, i) => add(`<button class="sw" data-color="${c}" data-tip="Colour  ${i + 1}"></button>`));
+  add('<span class="sep"></span>');
+  [0, 1, 2, 3].forEach(i => add(`<button class="wd" data-size="${i}"><i></i></button>`));
+  add('<span class="sep"></span>');
+  BGS.forEach(b => add(`<button class="bg" data-bg="${b.c}" data-tip="${b.label}" style="background:${b.c}"></button>`));
+  add('<span class="sep"></span>');
+  add(`<button class="btn" id="undoBtn" data-tip="Undo  Ctrl+Z">${ICON.undo}</button>`);
+  add(`<button class="btn" id="redoBtn" data-tip="Redo  Ctrl+Y">${ICON.redo}</button>`);
+  add(`<button class="btn" id="clearBtn" data-tip="Clear board  Ctrl+Del">${ICON.trash}</button>`);
+  add(`<button class="btn" id="presentBtn" data-tip="Presenter mode  Tab">${ICON.present}</button>`);
+}
+function syncUI() {
+  dock.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === S.tool));
+  dock.querySelectorAll('[data-color]').forEach(b => {
+    const c = b.dataset.color;
+    b.style.background = c === 'ink' ? inkNow() : c;
+    b.classList.toggle('on', c === S.color);
+  });
+  syncSizeUI(true);
+  dock.querySelectorAll('[data-bg]').forEach(b => b.classList.toggle('on', b.dataset.bg === S.bg));
+  document.documentElement.style.background = S.bg;
+  document.body.classList.toggle('boarddark', isDark(S.bg));
+}
+dock.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.tool) setTool(b.dataset.tool);
+  else if (b.dataset.color) setColor(b.dataset.color);
+  else if (b.dataset.size !== undefined) setSize(+b.dataset.size);
+  else if (b.dataset.bg) setBg(b.dataset.bg);
+  else if (b.id === 'undoBtn') undo();
+  else if (b.id === 'redoBtn') redo();
+  else if (b.id === 'clearBtn') clearBoard();
+  else if (b.id === 'presentBtn') togglePresent(true);
+});
+
+/* ---------- interface theme ---------- */
+function setTheme(dark, save = true) {
+  document.body.classList.toggle('dark', dark);
+  $('#themeBtn').innerHTML = dark ? ICON.sun : ICON.moon;
+  if (save) { try { localStorage.setItem('inkboard:ui', dark ? 'dark' : 'light'); } catch (e) {} }
+}
+
+/* ---------- toast ---------- */
+let tt;
+function toast(m) {
+  if (document.body.classList.contains('present')) return;
+  const t = $('#toast'); t.textContent = m; t.classList.add('show');
+  clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* ---------- export ---------- */
+function svgObj(o) {
+  const st = `fill="none" stroke="${o.color}" stroke-width="${o.width}" stroke-linecap="round" stroke-linejoin="round"`;
+  switch (o.type) {
+    case 'pen': return o.pts.length === 1
+      ? `<circle cx="${r2(o.pts[0][0])}" cy="${r2(o.pts[0][1])}" r="${o.width / 2}" fill="${o.color}"/>`
+      : `<path d="${penD(o.pts)}" ${st}/>`;
+    case 'rect': return `<path d="${rectD(norm(o))}" ${st}/>`;
+    case 'ellipse': { const n = norm(o); return `<ellipse cx="${r2(n.x + n.w / 2)}" cy="${r2(n.y + n.h / 2)}" rx="${r2(n.w / 2)}" ry="${r2(n.h / 2)}" ${st}/>`; }
+    case 'line': return `<path d="M${r2(o.x1)} ${r2(o.y1)}L${r2(o.x2)} ${r2(o.y2)}" ${st}/>`;
+    case 'arrow': return `<path d="${arrowD(o)}" ${st}/>`;
+    case 'text': {
+      const lines = o.text.split('\n');
+      return `<text x="${r2(o.x)}" y="${r2(o.y)}" font-family="${FONT}" font-size="${o.size}" font-weight="500" fill="${o.color}" dominant-baseline="hanging" xml:space="preserve">` +
+        lines.map((l, i) => `<tspan x="${r2(o.x)}" dy="${i ? o.size * 1.25 : 0}">${esc(l) || ' '}</tspan>`).join('') + '</text>';
+    }
+  }
+  return '';
+}
+function toSvg() {
+  const b = contentBounds();
+  const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="${r2(b.w)}" height="${r2(b.h)}" viewBox="${r2(b.x)} ${r2(b.y)} ${r2(b.w)} ${r2(b.h)}">`,
+    `<rect x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(b.w)}" height="${r2(b.h)}" fill="${S.bg}"/>`];
+  for (const o of S.objects) out.push(svgObj(o));
+  out.push('</svg>');
+  return out.join('\n');
+}
+const payload = () => ({ app: 'inkboard', v: 1, name: S.name, bg: S.bg, objects: S.objects });
+
+// <png>
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(buf) { let c = 0xffffffff; for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+function makeTextChunk(key, val) {
+  const enc = new TextEncoder(), kb = enc.encode(key), vb = enc.encode(val), type = enc.encode('tEXt');
+  const data = new Uint8Array(kb.length + 1 + vb.length);
+  data.set(kb, 0); data[kb.length] = 0; data.set(vb, kb.length + 1);
+  const out = new Uint8Array(12 + data.length), dv = new DataView(out.buffer);
+  dv.setUint32(0, data.length); out.set(type, 4); out.set(data, 8);
+  const crcIn = new Uint8Array(4 + data.length); crcIn.set(type, 0); crcIn.set(data, 4);
+  dv.setUint32(8 + data.length, crc32(crcIn));
+  return out;
+}
+const toB64 = s => btoa(unescape(encodeURIComponent(s)));
+const fromB64 = s => decodeURIComponent(escape(atob(s)));
+async function embedInPng(blob, key, val) {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  const iend = buf.length - 12; // IEND is always the last chunk (12 bytes)
+  const chunk = makeTextChunk(key, toB64(val));
+  const out = new Uint8Array(buf.length + chunk.length);
+  out.set(buf.subarray(0, iend), 0); out.set(chunk, iend); out.set(buf.subarray(iend), iend + chunk.length);
+  return new Blob([out], { type: 'image/png' });
+}
+async function readFromPng(file) {
+  const buf = new Uint8Array(await file.arrayBuffer()), dv = new DataView(buf.buffer), dec = new TextDecoder();
+  let p = 8;
+  while (p + 8 <= buf.length) {
+    const len = dv.getUint32(p), type = dec.decode(buf.subarray(p + 4, p + 8));
+    if (type === 'tEXt') {
+      const d = buf.subarray(p + 8, p + 8 + len), z = d.indexOf(0);
+      if (dec.decode(d.subarray(0, z)) === 'inkboard') return JSON.parse(fromB64(dec.decode(d.subarray(z + 1))));
+    }
+    if (type === 'IEND') break;
+    p += 12 + len;
+  }
+  return null;
+}
+// </png>
+
+function toPng(transparent) {
+  const b = contentBounds();
+  let s = 2; const m = Math.max(b.w, b.h) * s; if (m > 8000) s *= 8000 / m;
+  const c = document.createElement('canvas');
+  c.width = Math.round(b.w * s); c.height = Math.round(b.h * s);
+  const g = c.getContext('2d');
+  if (!transparent) { g.fillStyle = S.bg; g.fillRect(0, 0, c.width, c.height); }
+  g.scale(s, s); g.translate(-b.x, -b.y);
+  for (const o of S.objects) drawObj(g, o);
+  return new Promise(res => c.toBlob(res, 'image/png'))
+    .then(blob => embedInPng(blob, 'inkboard', JSON.stringify(payload())));
+}
+
+/* ---------- folder + files ---------- */
+function idb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('inkboard', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); } catch (e) { return null; } }
+async function idbSet(k, v) { try { const db = await idb(); await new Promise(res => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = res; }); } catch (e) {} }
+
+function folderLabel() { $('#folderLabel').textContent = dirHandle ? dirHandle.name : 'Choose folder'; }
+async function pickFolder() {
+  if (!HAS_FS) return false;
+  try {
+    dirHandle = await window.showDirectoryPicker({ id: 'inkboard', mode: 'readwrite', startIn: 'documents' });
+    await idbSet('dir', dirHandle); folderLabel(); toast('Saving to ' + dirHandle.name); return true;
+  } catch (e) { return false; }
+}
+async function ensurePermission(h) {
+  const o = { mode: 'readwrite' };
+  if ((await h.queryPermission(o)) === 'granted') return true;
+  return (await h.requestPermission(o)) === 'granted';
+}
+async function writeOut(name, blob) {
+  if (dirHandle) {
+    try {
+      if (await ensurePermission(dirHandle)) {
+        const fh = await dirHandle.getFileHandle(name, { create: true });
+        const w = await fh.createWritable(); await w.write(blob); await w.close();
+        return 'folder';
+      }
+    } catch (e) { /* fall through to download */ }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  return 'download';
+}
+const slug = s => (s.trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-')) || 'board';
+async function save(kind) {
+  closeMenu();
+  if (editing) editing.commit();
+  if (!S.objects.length && kind !== 'json') { toast('Nothing to save yet'); return; }
+  if (HAS_FS && !dirHandle) await pickFolder();
+  const base = slug(S.name);
+  let blob, name;
+  try {
+    if (kind === 'png' || kind === 'png-t') { blob = await toPng(kind === 'png-t'); name = base + (kind === 'png-t' ? '-transparent' : '') + '.png'; }
+    else if (kind === 'svg') { blob = new Blob([toSvg()], { type: 'image/svg+xml' }); name = base + '.svg'; }
+    else { blob = new Blob([JSON.stringify(payload(), null, 1)], { type: 'application/json' }); name = base + '.inkboard.json'; }
+    const where = await writeOut(name, blob);
+    toast(where === 'folder' ? `Saved ${name} to ${dirHandle.name}` : `Downloaded ${name}`);
+  } catch (err) { toast('Save failed: ' + err.message); }
+}
+async function loadFile(file) {
+  try {
+    let data = null;
+    if (/\.png$/i.test(file.name) || file.type === 'image/png') {
+      data = await readFromPng(file);
+      if (!data) { toast('That PNG has no Inkboard data in it'); return; }
+    } else data = JSON.parse(await file.text());
+    if (!data || data.app !== 'inkboard') { toast('Not an Inkboard file'); return; }
+    if (editing) editing.commit();
+    pushUndo();
+    S.objects = data.objects || []; S.bg = data.bg || '#ffffff'; S.sel = null;
+    S.name = data.name || file.name.replace(/\.(inkboard\.json|json|png)$/i, '');
+    $('#name').value = S.name; syncUI(); changed(); fitView();
+    toast('Opened ' + file.name);
+  } catch (err) { toast('Could not open that file'); }
+}
+async function openFile() {
+  closeMenu();
+  if (window.showOpenFilePicker) {
+    try {
+      const opts = { types: [{ description: 'Inkboard', accept: { 'image/png': ['.png'], 'application/json': ['.json'] } }] };
+      if (dirHandle) opts.startIn = dirHandle;
+      const [h] = await window.showOpenFilePicker(opts);
+      loadFile(await h.getFile());
+    } catch (e) { /* cancelled */ }
+  } else $('#file').click();
+}
+$('#file').addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); e.target.value = ''; });
+addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dragover'); });
+addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('dragover'); });
+addEventListener('drop', e => { e.preventDefault(); document.body.classList.remove('dragover'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+
+/* ---------- templates ---------- */
+function viewCenter() {
+  return { x: (innerWidth / 2 - S.view.x) / S.view.k, y: (innerHeight / 2 - S.view.y) / S.view.k };
+}
+function makeKanban(wx, wy) {
+  const { x: cx, y: cy } = wx != null ? { x: wx, y: wy } : viewCenter();
+  const acc = '#3b6cf6', CW = 200, CH = 420;
+  const x = cx - CW / 2, y = cy - CH / 2;
+  const gid = 'kb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+  return [
+    { type: 'rect', x, y, w: CW, h: CH, color: acc, width: 1.5, group: gid },
+    { type: 'text', x: x + 14, y: y + 15, text: 'Column', size: 16, color: acc, group: gid },
+    { type: 'line', x1: x + 10, y1: y + 44, x2: x + CW - 10, y2: y + 44, color: acc, width: 1, group: gid },
+  ];
+}
+function makeMindmap(wx, wy) {
+  const { x: cx, y: cy } = wx != null ? { x: wx, y: wy } : viewCenter();
+  const acc = '#3b6cf6', cw = 160, ch = 56;
+  const gid = 'mm-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+  mctx.font = `500 17px ${FONT}`;
+  const ctw = mctx.measureText('Main Topic').width;
+  return [
+    { type: 'rect', x: cx - cw / 2, y: cy - ch / 2, w: cw, h: ch, color: acc, width: 1.5, group: gid },
+    { type: 'text', x: cx - ctw / 2, y: cy - 11, text: 'Main Topic', size: 17, color: acc, group: gid },
+  ];
+}
+function stampTemplate(objs) {
+  pushUndo();
+  objs.forEach(o => S.objects.push(o));
+  S.selSet = new Set(objs); S.sel = null;
+  S.tool = 'select'; syncUI(); cv.style.cursor = CURSORS.select;
+  changed();
+  toast('Template added — drag to reposition');
+}
+
+/* ---------- top bar wiring ---------- */
+const menu = $('#menu');
+function closeMenu() { menu.hidden = true; $('#tmpMenu').hidden = true; }
+$('#saveBtn').addEventListener('click', e => { e.stopPropagation(); const h = menu.hidden; closeMenu(); menu.hidden = !h; });
+menu.addEventListener('click', e => { const b = e.target.closest('[data-save]'); if (b) save(b.dataset.save); });
+document.addEventListener('click', e => { if (!e.target.closest('.savewrap')) closeMenu(); });
+$('#tmpBtn').addEventListener('click', e => { e.stopPropagation(); const tm = $('#tmpMenu'), h = tm.hidden; closeMenu(); tm.hidden = !h; });
+$('#tmplKanban').addEventListener('click', () => { closeMenu(); stampTemplate(makeKanban()); });
+$('#tmplMindmap').addEventListener('click', () => { closeMenu(); stampTemplate(makeMindmap()); });
+$('#openBtn').addEventListener('click', openFile);
+$('#newBtn').addEventListener('click', newBoard);
+$('#themeBtn').addEventListener('click', () => {
+  const dark = !document.body.classList.contains('dark');
+  setTheme(dark);
+  const want = dark ? CHARCOAL : WHITE;
+  if (S.bg !== want) setBg(want);   // dark mode brings a dark canvas, ink flips to white
+});
+$('#helpBtn').addEventListener('click', openHelp);
+$('#helpClose').addEventListener('click', closeHelp);
+$('#help').addEventListener('pointerdown', e => { if (e.target.id === 'help') closeHelp(); });
+$('#folderBtn').addEventListener('click', () => HAS_FS ? pickFolder() : toast('Folder saving needs Chrome or Edge. Files go to Downloads instead.'));
+$('#name').addEventListener('input', e => { S.name = e.target.value; changed(); });
+if (!HAS_FS) $('#folderBtn').title = 'Folder saving needs Chrome or Edge';
+
+/* ---------- boot ---------- */
+build();
+$('#helpBtn').innerHTML = ICON.keyboard; $('#helpClose').innerHTML = ICON.close; buildHelp();
+{
+  let ui = null; try { ui = localStorage.getItem('inkboard:ui'); } catch (e) {}
+  setTheme(ui ? ui === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches, false);
+}
+let hadSaved = false;
+try {
+  const a = JSON.parse(localStorage.getItem('inkboard:auto') || 'null');
+  if (a && a.objects) { hadSaved = true; S.objects = a.objects; S.bg = a.bg || S.bg; S.name = a.name || S.name; if (a.view) S.view = a.view; }
+} catch (e) {}
+if (!hadSaved && document.body.classList.contains('dark')) S.bg = CHARCOAL;
+$('#name').value = S.name;
+cv.style.cursor = CURSORS[S.tool];
+syncUI(); resize(); changed();
+idbGet('dir').then(h => { if (h) { dirHandle = h; folderLabel(); } });
+})();
+</script>
+</body>
+</html>
