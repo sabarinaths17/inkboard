@@ -268,8 +268,18 @@ function render() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paint
 function norm(o) { return { x: Math.min(o.x, o.x + o.w), y: Math.min(o.y, o.y + o.h), w: Math.abs(o.w), h: Math.abs(o.h) }; }
 function measure(o) {
   mctx.font = `500 ${o.size}px ${FONT}`;
+  const cs = o.size * 0.72;
   const lines = o.text.split('\n');
-  let w = 0; for (const l of lines) w = Math.max(w, mctx.measureText(l).width);
+  let w = 0;
+  for (const l of lines) {
+    let m;
+    if (l.startsWith('[ ] ') || l === '[ ]' || l.startsWith('[x] ') || l === '[x]')
+      m = mctx.measureText(l.length <= 3 ? '' : l.slice(4)).width + cs + 6;
+    else if (l.startsWith('- ') || l.startsWith('. '))
+      m = mctx.measureText('• ' + l.slice(2)).width;
+    else m = mctx.measureText(l).width;
+    w = Math.max(w, m);
+  }
   return { w, h: lines.length * o.size * 1.25 };
 }
 function bbox(o) {
@@ -444,6 +454,34 @@ function arrowD(o) {
 }
 
 /* ---------- drawing ---------- */
+function drawMdText(c, o) {
+  const lh = o.size * 1.25, cs = Math.round(o.size * 0.72);
+  o.text.split('\n').forEach((l, i) => {
+    const ly = o.y + i * lh;
+    if (l.startsWith('- ') || l.startsWith('. ')) {
+      c.fillText('• ' + l.slice(2), o.x, ly);
+    } else if (l === '[ ]' || l.startsWith('[ ] ')) {
+      const txt = l.length <= 3 ? '' : l.slice(4);
+      const bx = o.x + 1, by = ly + (o.size - cs) / 2;
+      c.save(); c.lineWidth = Math.max(1.2, cs * 0.1); c.strokeStyle = c.fillStyle;
+      c.strokeRect(bx, by, cs, cs); c.restore();
+      if (txt) c.fillText(txt, o.x + cs + 6, ly);
+    } else if (l === '[x]' || l.startsWith('[x] ')) {
+      const txt = l.length <= 3 ? '' : l.slice(4);
+      const bx = o.x + 1, by = ly + (o.size - cs) / 2;
+      c.save(); c.lineWidth = Math.max(1.2, cs * 0.1); c.strokeStyle = c.fillStyle;
+      c.strokeRect(bx, by, cs, cs);
+      c.beginPath();
+      c.moveTo(bx + cs * 0.15, by + cs * 0.52);
+      c.lineTo(bx + cs * 0.42, by + cs * 0.80);
+      c.lineTo(bx + cs * 0.85, by + cs * 0.20);
+      c.stroke(); c.restore();
+      if (txt) { c.globalAlpha = 0.45; c.fillText(txt, o.x + cs + 6, ly); c.globalAlpha = 1; }
+    } else {
+      c.fillText(l, o.x, ly);
+    }
+  });
+}
 function drawObj(c, o) {
   c.strokeStyle = o.color; c.fillStyle = o.color;
   c.lineWidth = o.width || 1; c.lineCap = 'round'; c.lineJoin = 'round';
@@ -462,7 +500,7 @@ function drawObj(c, o) {
     case 'arrow': c.stroke(new Path2D(arrowD(o))); break;
     case 'text': {
       c.font = `500 ${o.size}px ${FONT}`; c.textBaseline = 'top';
-      o.text.split('\n').forEach((l, i) => c.fillText(l, o.x, o.y + i * o.size * 1.25));
+      drawMdText(c, o);
       break;
     }
   }
@@ -541,10 +579,12 @@ function portsFor(o) {
   ];
 }
 function portAt(p) {
-  const o = S.sel;
-  if (!o || o.type !== 'rect') return null;
+  if (S.tool !== 'select') return null;
   const tol = 10 / S.view.k;
-  for (const pt of portsFor(o)) if (Math.hypot(p.x - pt.x, p.y - pt.y) <= tol) return pt;
+  for (const o of S.objects) {
+    if (o.type !== 'rect') continue;
+    for (const pt of portsFor(o)) if (Math.hypot(p.x - pt.x, p.y - pt.y) <= tol) return { ...pt, obj: o };
+  }
   return null;
 }
 function paintPorts(o) {
@@ -623,10 +663,10 @@ function updateHover(e) {
   if (spaceDown) return;
   let cur = CURSORS[S.tool];
   if (pinHitObj(e)) cur = 'move';
-  else if (S.sel) {
+  else {
     const wp = toWorld(e);
-    const h = handleAt(wp); if (h) cur = RESIZE_CURSOR[h] || cur;
-    else if (S.sel.type === 'rect' && S.tool === 'select' && portAt(wp)) cur = 'crosshair';
+    if (S.sel) { const h = handleAt(wp); if (h) cur = RESIZE_CURSOR[h] || cur; }
+    if (S.tool === 'select') { const pt = portAt(wp); if (pt) cur = 'crosshair'; }
   }
   cv.style.cursor = cur;
 }
@@ -791,6 +831,24 @@ function newBoard() {
   S.view = { x: 0, y: 0, k: 1 }; changed(); toast('New board. Ctrl+Z brings the old one back.');
 }
 
+/* ---------- markdown helpers ---------- */
+function checkboxLineAt(o, p) {
+  const lh = o.size * 1.25, cs = o.size * 0.72;
+  const li = Math.floor((p.y - o.y) / lh);
+  if (li < 0) return -1;
+  const lines = o.text.split('\n');
+  if (li >= lines.length) return -1;
+  const l = lines[li];
+  if (!l.startsWith('[ ]') && !l.startsWith('[x]')) return -1;
+  if (p.x >= o.x && p.x <= o.x + cs + 8) return li;
+  return -1;
+}
+function toggleCheckbox(o, li) {
+  const lines = o.text.split('\n');
+  lines[li] = lines[li].startsWith('[ ]') ? lines[li].replace('[ ]', '[x]') : lines[li].replace('[x]', '[ ]');
+  pushUndo(); o.text = lines.join('\n'); changed();
+}
+
 /* ---------- text editing ---------- */
 function startText(o, p) {
   if (editing) editing.commit();
@@ -875,11 +933,16 @@ cv.addEventListener('pointerdown', e => {
       if (h) { drag = { mode: 'resize', h, orig: clone(S.sel) }; beginChange(); break; }
       const pt = portAt(p);
       if (pt) {
+        S.sel = pt.obj; S.selSet = new Set();
         const col = resolveColor(S.color);
         draft = { type: 'arrow', x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y, color: col, width: STROKES[S.sz.stroke] };
-        drag = { mode: 'connect', src: S.sel, srcPort: pt.id, snap: null }; beginChange(); break;
+        drag = { mode: 'connect', src: pt.obj, srcPort: pt.id, snap: null }; beginChange(); break;
       }
       const o = pick(p);
+      if (o && o.type === 'text') {
+        const ci = checkboxLineAt(o, p);
+        if (ci >= 0) { S.sel = o; S.selSet = new Set(); toggleCheckbox(o, ci); break; }
+      }
       if (o) {
         if (S.selSet.size > 1 && S.selSet.has(o)) {
           drag = { mode: 'move', x0: p.x, y0: p.y, orig: clone(o), sx: e.clientX, sy: e.clientY, dup: e.altKey, moveAll: [...S.selSet].map(x => ({ obj: x, snap: clone(x) })) };
@@ -1076,8 +1139,12 @@ cv.addEventListener('pointerup', endDrag);
 cv.addEventListener('pointercancel', endDrag);
 cv.addEventListener('pointerleave', () => { ptr.on = false; if (!drag) hoverText = null; render(); });
 cv.addEventListener('dblclick', e => {
-  const o = S.tool === 'select' ? pick(toWorld(e)) : null;
-  if (o && o.type === 'text') { S.sel = o; startText(o); }
+  const p = toWorld(e);
+  const o = S.tool === 'select' ? pick(p) : null;
+  if (o && o.type === 'text') { S.sel = o; startText(o); return; }
+  if (o && o.type === 'rect' && o.group && o.group.startsWith('kb-') && p.y > o.y + 44) {
+    startText(null, p);
+  }
 });
 cv.addEventListener('wheel', e => {
   e.preventDefault();
@@ -1405,7 +1472,7 @@ build();
 $('#helpBtn').innerHTML = ICON.keyboard; $('#helpClose').innerHTML = ICON.close; buildHelp();
 {
   let ui = null; try { ui = localStorage.getItem('inkboard:ui'); } catch (e) {}
-  setTheme(ui ? ui === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches, false);
+  setTheme(ui ? ui === 'dark' : false, false);
 }
 let hadSaved = false;
 try {
