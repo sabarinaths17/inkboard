@@ -7,11 +7,12 @@ Single-file whiteboard canvas app: `inkboard.html`. All logic, styles, and marku
 - **State**: `const S = { objects, view, tool, color, sz, bg, sel, selSet, name }` — single global state object
 - **Rendering**: canvas-based, `paint()` → `drawObj()` per object; selection overlays drawn after
 - **History**: simple array-based undo/redo via `pushUndo()` / `hist.u` / `hist.r`
-- **Persistence**: IndexedDB for auto-save; file system API (`dirHandle`) for folder saves; PNG/JSON export
+- **Persistence**: IndexedDB auto-save via `localStorage`; file system API (`dirHandle`) for folder saves; PNG/JSON export
+- **Theme**: defaults to light mode on first open; `setTheme(dark, save?)` toggles UI; board bg follows separately via `setBg()`
 
 ## Object model
 
-Each object in `S.objects` has a `type` field: `pen | rect | ellipse | line | arrow | text`. Objects are plain JS objects — no classes. `clone()` deep-copies them, `moveObj()` translates them, `bbox()` returns their bounding box.
+Each object in `S.objects` has a `type` field: `pen | rect | ellipse | line | arrow | text`. Objects are plain JS objects — no classes. `clone()` deep-copies them (note: `srcConn`/`dstConn` object refs are lost on JSON round-trip), `moveObj()` translates them, `bbox()` returns their bounding box.
 
 ## Selection model
 
@@ -53,16 +54,17 @@ Keybindings: V P E R O A L T H respectively.
 
 - `marquee`: rubber-band rect drawn on canvas while dragging empty space with select tool; on release selects all objects whose bbox overlaps the rect
 - `move` with `drag.moveAll`: set when moving within a multi-selection; each item's original position stored in `drag.moveAll` as `{ obj, snap }`
-- `connect`: started by dragging from a port handle on a selected rect; draws a draft arrow from that port; snaps endpoint to nearest port on any other rect within 40px; on release creates an arrow object if long enough (>8px); if dropped on empty space, auto-spawns a new mind map node at the endpoint (new node's west port aligns with arrow tip)
+- `connect`: started by dragging from a port handle on any rect (no pre-selection needed); draws a draft arrow from that port; snaps endpoint to nearest port on any other rect within 40px; on release creates an arrow object if long enough (>8px); dropped on empty space auto-spawns a new node in the arrow's travel direction
 
 ## Port handles
 
 Port handles are the 4 blue dots at the N/E/S/W midpoints of a selected `rect` object, visible only when the select tool is active. Used to drag out arrow connections (Obsidian Canvas style).
 
 - `portsFor(o)` — returns `[{id, x, y}]` for the 4 midpoints of `o`'s bbox
-- `portAt(p)` — returns the port under world point `p` (tolerance 10/k), or null
+- `portAt(p)` — scans **all** rects for a port within tolerance 10/k; returns `{id, x, y, obj}` or null; tool must be `'select'`
 - `paintPorts(o)` — draws the 4 blue filled circles with white stroke
-- Cursor changes to `crosshair` when hovering a port
+- Cursor changes to `crosshair` when hovering any port regardless of current selection
+- Multiple arrows can originate from the same port; clicking a port starts a new connect drag even when the source rect isn't selected
 
 ## Curved arrows
 
@@ -79,6 +81,24 @@ Arrow objects support an optional `cx, cy` control point (quadratic bezier). Whe
 - During connect drag, endpoint snaps live to nearest port and a blue glow ring highlights the target rect
 - Arrows created via port-snap store `arrow.srcConn = { obj, port }` and `arrow.dstConn = { obj, port }` as direct object references
 - `updateConnectedArrows(movedObjs[])` — called during move drag; scans all arrows and updates x1/y1 or x2/y2 for any whose srcConn/dstConn points to a moved rect; uses `portsFor()` to get current port positions
+- Auto-spawn direction: new node appears in the direction the arrow was dragged; `drag.srcPort` determines offset direction and opposite dstConn port (`OPP = {e:'w', w:'e', n:'s', s:'n'}`)
+
+## Markdown text rendering
+
+Text objects render Obsidian-style inline markdown via `drawMdText(c, o)`:
+
+| Syntax | Rendered |
+|---|---|
+| `- text` or `. text` | `• text` (bullet) |
+| `[ ] text` | unchecked checkbox □ + text |
+| `[x] text` | checked checkbox ✓ + dimmed text |
+
+- `drawMdText(c, o)` — called from `drawObj` text case; splits on `\n`, renders each line with its markdown prefix
+- Checkbox square size: `cs = round(o.size * 0.72)`; positioned vertically centered on the line
+- `checkboxLineAt(o, p)` — returns line index if world point `p` hits the checkbox symbol area of a `[ ]`/`[x]` line, else -1
+- `toggleCheckbox(o, li)` — flips `[ ]` ↔ `[x]` on line `li`; calls `pushUndo()` + `changed()`
+- Single click on a checkbox symbol in select mode toggles it without entering edit mode
+- `measure(o)` accounts for checkbox/bullet width offsets in bbox calculation
 
 ## Clipboard
 
@@ -92,14 +112,15 @@ Templates panel is in the topright bar ("Templates" chip). Two templates availab
 - Single empty column (200×420) — no pre-filled cards
 - Column outline (rect) + "Column" title text + horizontal divider line; all 3 share a `group: 'kb-...'` id so they move together
 - Colors: accent blue (`#3b6cf6`) for column chrome
-- Dragging an arrow from a kanban rect port to empty space auto-spawns a new linked kanban column at the tip
+- Dragging an arrow from any kanban port to empty space auto-spawns a new linked kanban column in that direction
+- Double-clicking inside the kanban body (below the divider at y+44) creates a text element at that position
 - `makeKanban(cx?, cy?)` accepts optional world-coordinate center; defaults to `viewCenter()`
 
 ### Mind Map Node
 - Single rectangular node (160×56) + "Main Topic" text — no pre-built branches
 - Both objects share a `group: 'mm-...'` id; moving the rect moves the text with it
 - Rect shows 4 connection ports (N/E/S/W midpoints) when selected with the select tool; drag from a port to create an arrow
-- Dropping an arrow on empty space auto-spawns a new linked node at the tip
+- Dropping an arrow on empty space auto-spawns a new linked node in the arrow's travel direction; new node's facing port aligns with the arrow tip
 - `makeMindmap(cx?, cy?)` accepts optional world-coordinate center; defaults to `viewCenter()`
 
 ### Stamp logic (`stampTemplate(objs)`)
