@@ -520,7 +520,7 @@ function paint() {
     if (hoverText && S.objects.includes(hoverText)) pins.add(hoverText);
     pins.forEach(paintPin);
   }
-  if (drag && drag.mode === 'connect' && drag.snap) {
+  if (drag && drag.snap && (drag.mode === 'connect' || (drag.mode === 'resize' && (drag.h === 'p1' || drag.h === 'p2')))) {
     const { x, y, k } = S.view, o = drag.snap.obj, b = bbox(o);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.save(); ctx.lineWidth = 2; ctx.strokeStyle = '#3b6cf6';
@@ -1060,7 +1060,17 @@ cv.addEventListener('pointermove', e => {
         if (S.sel && S.sel.type === 'rect') updateConnectedArrows([S.sel]);
       }
       changed(); break;
-    case 'resize': markChanged(); applyResize(S.sel, drag.orig, drag.h, p); changed(); break;
+    case 'resize': {
+      markChanged();
+      let rp = p;
+      if (S.sel && S.sel.type === 'arrow' && (drag.h === 'p1' || drag.h === 'p2')) {
+        const sn = nearestPortSnap(p, null);
+        drag.snap = sn || null;
+        rp = sn ? { x: sn.x, y: sn.y } : p;
+      } else { drag.snap = null; }
+      applyResize(S.sel, drag.orig, drag.h, rp);
+      changed(); break;
+    }
   }
 });
 function updateConnectedArrows(movedObjs) {
@@ -1138,6 +1148,10 @@ function endDrag() {
       if (draft.type === 'rect' || draft.type === 'ellipse') Object.assign(draft, norm(draft));
       pushUndo(); S.objects.push(draft);
     }
+  }
+  if (drag.mode === 'resize' && S.sel && S.sel.type === 'arrow') {
+    if (drag.h === 'p1') { delete S.sel.srcConn; if (drag.snap) S.sel.srcConn = { obj: drag.snap.obj, port: drag.snap.id }; }
+    else if (drag.h === 'p2') { delete S.sel.dstConn; if (drag.snap) S.sel.dstConn = { obj: drag.snap.obj, port: drag.snap.id }; }
   }
   draft = null; drag = null; pending = null;
   cv.style.cursor = spaceDown ? 'grab' : CURSORS[S.tool];
