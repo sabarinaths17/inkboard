@@ -660,13 +660,17 @@ function updateHover(e) {
     if (px >= l - 30 && px <= r + 6 && py >= t - 30 && py <= bt + 6) { found = o; break; }
   }
   if (found !== hoverText) { hoverText = found; render(); }
-  if (spaceDown) return;
+  if (spaceDown || drag) return;
   let cur = CURSORS[S.tool];
   if (pinHitObj(e)) cur = 'move';
   else {
     const wp = toWorld(e);
     if (S.sel) { const h = handleAt(wp); if (h) cur = RESIZE_CURSOR[h] || cur; }
-    if (S.tool === 'select') { const pt = portAt(wp); if (pt) cur = 'crosshair'; }
+    if (S.tool === 'select') {
+      const pt = portAt(wp);
+      if (pt) cur = 'crosshair';
+      else if (!pick(wp)) cur = 'grab';
+    }
   }
   cv.style.cursor = cur;
 }
@@ -958,8 +962,8 @@ cv.addEventListener('pointerdown', e => {
         beginChange(); break;
       }
       S.sel = null; S.selSet = new Set();
-      drag = { mode: 'marquee', x0: p.x, y0: p.y, x1: p.x, y1: p.y };
-      render(); break;
+      drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: S.view.x, vy: S.view.y };
+      cv.style.cursor = 'grabbing'; break;
     }
   }
 });
@@ -1153,7 +1157,14 @@ cv.addEventListener('dblclick', e => {
 cv.addEventListener('wheel', e => {
   e.preventDefault();
   if (editing) editing.commit();
-  zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0015));
+  if (e.ctrlKey) {
+    zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0015));
+  } else {
+    const sc = e.deltaMode === 1 ? 20 : 1;
+    S.view.x -= e.deltaX * sc;
+    S.view.y -= e.deltaY * sc;
+    render();
+  }
 }, { passive: false });
 
 /* ---------- keyboard ---------- */
