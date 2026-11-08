@@ -1081,20 +1081,24 @@ function endDrag() {
       pushUndo(); S.objects.push(draft);
       if (!drag.snap && drag.src && drag.src.group) {
         const grp = drag.src.group;
+        const sp = drag.srcPort || 'e';
+        const OPP = { e: 'w', w: 'e', n: 's', s: 'n' };
+        const dstPort = OPP[sp] || 'w';
         if (grp.startsWith('mm-')) {
-          const newObjs = makeMindmap(draft.x2 + 80, draft.y2);
+          const off = { e: [80, 0], w: [-80, 0], n: [0, -28], s: [0, 28] }[sp] || [80, 0];
+          const newObjs = makeMindmap(draft.x2 + off[0], draft.y2 + off[1]);
           newObjs.forEach(o => S.objects.push(o));
           const newRect = newObjs.find(o => o.type === 'rect');
-          if (newRect) { draft.dstConn = { obj: newRect, port: 'w' }; }
+          if (newRect) { draft.dstConn = { obj: newRect, port: dstPort }; }
           S.selSet = new Set(newObjs); S.sel = null;
           S.tool = 'select'; syncUI();
           toast('New node added — drag to reposition');
         } else if (grp.startsWith('kb-')) {
-          const CW = 200, CH = 420;
-          const newObjs = makeKanban(draft.x2 + CW / 2, draft.y2);
+          const off = { e: [100, 0], w: [-100, 0], n: [0, -210], s: [0, 210] }[sp] || [100, 0];
+          const newObjs = makeKanban(draft.x2 + off[0], draft.y2 + off[1]);
           newObjs.forEach(o => S.objects.push(o));
           const newRect = newObjs.find(o => o.type === 'rect');
-          if (newRect) { draft.dstConn = { obj: newRect, port: 'w' }; }
+          if (newRect) { draft.dstConn = { obj: newRect, port: dstPort }; }
           S.selSet = new Set(newObjs); S.sel = null;
           S.tool = 'select'; syncUI();
           toast('New column added — drag to reposition');
