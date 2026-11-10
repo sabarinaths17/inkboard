@@ -107,7 +107,12 @@ body.boarddark #brand,body.boarddark #empty{--text:#f2f2f5;--muted2:#b8b8c2;--ho
 body.dragover::after{content:"Drop a board (.png or .json) to open it";position:fixed;inset:14px;border:2px dashed var(--accent);border-radius:22px;background:rgba(59,108,246,.06);display:grid;place-items:center;font:600 18px var(--font);color:var(--accent);z-index:30}
 /* page bar */
 #page-bar{position:fixed;bottom:0;left:0;right:0;height:38px;display:flex;align-items:center;gap:0;padding:0 200px 0 8px;border-top:1px solid var(--line);background:var(--glass);-webkit-backdrop-filter:blur(16px) saturate(1.5);backdrop-filter:blur(16px) saturate(1.5);z-index:12;transition:transform .22s ease}
-#page-bar.collapsed{transform:translateY(32px)}
+#page-bar.collapsed{transform:translateY(100%)}
+#page-restore{position:fixed;bottom:0;left:0;height:20px;padding:0 10px;background:var(--glass);-webkit-backdrop-filter:blur(16px) saturate(1.5);backdrop-filter:blur(16px) saturate(1.5);border:1px solid var(--line);border-bottom:none;border-radius:6px 6px 0 0;font:500 11px var(--font);color:var(--muted);cursor:pointer;display:none;align-items:center;z-index:13}
+#page-restore:hover{color:var(--text)}
+body.bar-off #page-restore{display:flex}
+body.bar-off #dock{bottom:22px!important}
+body.bar-off #zoom{bottom:30px!important}
 #page-tabs{display:flex;align-items:center;gap:2px;overflow-x:auto;flex:1;min-width:0}
 #page-tabs::-webkit-scrollbar{display:none}
 .pg-wrap{position:relative;display:inline-flex;align-items:center;flex-shrink:0}
@@ -192,6 +197,7 @@ body:not(.bar-off) #zoom{bottom:52px}
 <div id="toast"></div>
 <input type="file" id="file" accept=".png,.json" hidden>
 
+<button id="page-restore" class="ui">Pages ▴</button>
 <div id="page-bar" class="ui">
   <button id="page-toggle" title="Hide pages">▾</button>
   <div id="page-tabs"></div>
@@ -1606,12 +1612,14 @@ $('#help').addEventListener('pointerdown', e => { if (e.target.id === 'help') cl
 $('#folderBtn').addEventListener('click', () => HAS_FS ? pickFolder() : toast('Folder saving needs Chrome or Edge. Files go to Downloads instead.'));
 $('#name').addEventListener('input', e => { S.name = e.target.value; changed(); });
 $('#page-add').addEventListener('click', addPage);
-$('#page-toggle').addEventListener('click', () => {
+function togglePageBar() {
   const off = document.body.classList.toggle('bar-off');
   $('#page-bar').classList.toggle('collapsed', off);
   $('#page-toggle').textContent = off ? '▴' : '▾';
   $('#page-toggle').title = off ? 'Show pages' : 'Hide pages';
-});
+}
+$('#page-toggle').addEventListener('click', togglePageBar);
+$('#page-restore').addEventListener('click', togglePageBar);
 if (!HAS_FS) $('#folderBtn').title = 'Folder saving needs Chrome or Edge';
 
 /* ---------- boot ---------- */
