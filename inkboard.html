@@ -184,7 +184,8 @@ body:not(.bar-off) #zoom{bottom:52px}
       <button data-save="png"><b>PNG</b><span>Opens in Paint, and re-editable here (Ctrl+S)</span></button>
       <button data-save="png-t"><b>PNG, transparent</b><span>For layering over video in OBS or an editor</span></button>
       <button data-save="svg"><b>SVG</b><span>Vector, for Figma, Canva, browsers</span></button>
-      <button data-save="json"><b>Board file</b><span>Small .inkboard.json backup</span></button>
+      <button data-save="json"><b>All pages</b><span>Every slide in one .inkboard.json</span></button>
+      <button data-save="json-page"><b>Current page only</b><span>Just this slide as .inkboard.json</span></button>
     </div>
   </div>
 </div>
@@ -1509,7 +1510,12 @@ async function save(kind) {
   try {
     if (kind === 'png' || kind === 'png-t') { blob = await toPng(kind === 'png-t'); name = base + (kind === 'png-t' ? '-transparent' : '') + '.png'; }
     else if (kind === 'svg') { blob = new Blob([toSvg()], { type: 'image/svg+xml' }); name = base + '.svg'; }
-    else { blob = new Blob([JSON.stringify(payload(), null, 1)], { type: 'application/json' }); name = base + '.inkboard.json'; }
+    else if (kind === 'json-page') {
+      const pg = S.pages[S.pageIdx];
+      const pgName = pg.name || ('Page ' + (S.pageIdx + 1));
+      const single = { app: 'inkboard', v: 1, name: S.name + ' — ' + pgName, pages: [{ id: pg.id, name: pgName, bg: S.bg, objects: S.objects }], pageIdx: 0 };
+      blob = new Blob([JSON.stringify(single, null, 1)], { type: 'application/json' }); name = slug(S.name + '-' + pgName) + '.inkboard.json';
+    } else { blob = new Blob([JSON.stringify(payload(), null, 1)], { type: 'application/json' }); name = base + '.inkboard.json'; }
     const where = await writeOut(name, blob);
     toast(where === 'folder' ? `Saved ${name} to ${dirHandle.name}` : `Downloaded ${name}`);
   } catch (err) { toast('Save failed: ' + err.message); }
