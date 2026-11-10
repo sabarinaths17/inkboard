@@ -106,7 +106,7 @@ body.boarddark #brand,body.boarddark #empty{--text:#f2f2f5;--muted2:#b8b8c2;--ho
 .helpnote{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;line-height:1.65;color:var(--muted)}
 body.dragover::after{content:"Drop a board (.png or .json) to open it";position:fixed;inset:14px;border:2px dashed var(--accent);border-radius:22px;background:rgba(59,108,246,.06);display:grid;place-items:center;font:600 18px var(--font);color:var(--accent);z-index:30}
 /* page bar */
-#page-bar{position:fixed;bottom:0;left:0;right:0;height:38px;display:flex;align-items:center;gap:0;padding:0 6px 0 8px;border-top:1px solid var(--line);background:var(--glass);-webkit-backdrop-filter:blur(16px) saturate(1.5);backdrop-filter:blur(16px) saturate(1.5);z-index:12;transition:transform .22s ease}
+#page-bar{position:fixed;bottom:0;left:0;right:0;height:38px;display:flex;align-items:center;gap:0;padding:0 200px 0 8px;border-top:1px solid var(--line);background:var(--glass);-webkit-backdrop-filter:blur(16px) saturate(1.5);backdrop-filter:blur(16px) saturate(1.5);z-index:12;transition:transform .22s ease}
 #page-bar.collapsed{transform:translateY(32px)}
 #page-tabs{display:flex;align-items:center;gap:2px;overflow-x:auto;flex:1;min-width:0}
 #page-tabs::-webkit-scrollbar{display:none}
@@ -119,7 +119,7 @@ body.dragover::after{content:"Drop a board (.png or .json) to open it";position:
 .pg-del:hover{opacity:1!important;background:var(--hover)}
 #page-add{color:var(--muted);border:0;background:transparent;border-radius:8px;width:28px;height:28px;cursor:pointer;display:grid;place-items:center;transition:background .15s,color .15s;flex-shrink:0;font-size:18px;line-height:1;padding-bottom:1px}
 #page-add:hover{background:var(--hover);color:var(--text)}
-#page-toggle{margin-left:4px;color:var(--muted);border:0;background:transparent;border-radius:8px;width:28px;height:28px;cursor:pointer;display:grid;place-items:center;transition:background .15s;flex-shrink:0;font-size:13px}
+#page-toggle{margin-right:4px;color:var(--muted);border:0;background:transparent;border-radius:8px;width:28px;height:28px;cursor:pointer;display:grid;place-items:center;transition:background .15s;flex-shrink:0;font-size:13px}
 #page-toggle:hover{background:var(--hover)}
 body:not(.bar-off) #dock{bottom:60px}
 body:not(.bar-off) #zoom{bottom:52px}
@@ -193,9 +193,9 @@ body:not(.bar-off) #zoom{bottom:52px}
 <input type="file" id="file" accept=".png,.json" hidden>
 
 <div id="page-bar" class="ui">
+  <button id="page-toggle" title="Hide pages">▾</button>
   <div id="page-tabs"></div>
   <button id="page-add" title="Add page">+</button>
-  <button id="page-toggle" title="Hide pages">▾</button>
 </div>
 
 <script>
