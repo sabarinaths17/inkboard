@@ -4,12 +4,14 @@ Single-file whiteboard canvas app: `inkboard.html`. All logic, styles, and marku
 
 ## Architecture
 
-- **State**: `const S = { objects, view, tool, color, sz, bg, sel, selSet, name }` — single global state object
+- **State**: `const S = { objects, view, tool, color, sz, bg, sel, selSet, name, pages, pageIdx }` — single global state object
 - **Rendering**: canvas-based, `paint()` → `drawObj()` per object; selection overlays drawn after
 - **History**: simple array-based undo/redo via `pushUndo()` / `hist.u` / `hist.r`
-- **Persistence**: auto-save to `localStorage` on every change; file system API (`dirHandle`) for folder saves; two export formats:
-  - **PNG** — visual export that also embeds the full board JSON invisibly in the file metadata; re-importing the PNG restores a fully editable board
-  - **`.inkboard.json`** — plain JSON snapshot of `{ name, bg, objects, view }`; re-importing restores all objects as live, dynamic canvas elements
+- **Persistence**: auto-save to `localStorage` on every change (saves all pages); file system API (`dirHandle`) for folder saves; two export formats:
+  - **PNG** — visual export that also embeds the full board JSON (all pages) invisibly in the file metadata; re-importing restores a fully editable multi-page board
+  - **`.inkboard.json`** — JSON snapshot of `{ app, v, name, pages, pageIdx }`; two save options in the Save menu:
+    - **All pages** — full board including every page
+    - **Current page only** — single-page snapshot wrapped in the same format (`pages` array with one entry, `pageIdx: 0`)
 - **Theme**: defaults to light mode on first open; `setTheme(dark, save?)` toggles UI; board bg follows separately via `setBg()`
 
 ## Object model
@@ -54,7 +56,7 @@ Keybindings: V P E R O A L T H respectively.
 
 `drag.mode`: `pan | draw | shape | erase | move | resize | marquee | connect`
 
-- `pan`: dragging empty canvas in select mode (or space+drag, middle-mouse, hand tool) pans the view; cursor shows `grab`/`grabbing`
+- `pan`: dragging empty canvas in select mode (or space+drag, middle-mouse, hand tool) pans the view; cursor shows `grab`/`grabbing`; two-finger trackpad scroll also pans (wheel event without ctrlKey); Ctrl+scroll or pinch zooms via `zoomAt()`
 - `marquee`: rubber-band rect drawn on canvas while dragging empty space with select tool; on release selects all objects whose bbox overlaps the rect (legacy — currently empty-space drag starts pan instead)
 - `move` with `drag.moveAll`: set when moving within a multi-selection; each item's original position stored in `drag.moveAll` as `{ obj, snap }`
 - `connect`: started by dragging from a port handle on any rect (no pre-selection needed); draws a draft arrow from that port; snaps endpoint to nearest port on any other rect within 40px; on release creates an arrow object if long enough (>8px); dropped on empty space auto-spawns a new node in the arrow's travel direction
@@ -130,6 +132,32 @@ Templates panel is in the topright bar ("Templates" chip). Two templates availab
 ### Stamp logic (`stampTemplate(objs)`)
 - Pushes undo snapshot, adds all objects, selects them all via `selSet`, switches to select tool, shows toast.
 - Colors in template objects are resolved at stamp time — they won't auto-adapt if the board theme changes later.
+
+## Multi-page support
+
+Each board can hold multiple pages (slides). `S.pages` is the array; `S.pageIdx` is the index of the active page. `S.objects` and `S.bg` always hold the **live values** for the current page — they are synced to/from `S.pages[S.pageIdx]` via `syncPageState()`.
+
+- Each page: `{ id: 'pg-<timestamp>', name: string, bg: string, objects: [] }`
+- `syncPageState()` — writes `S.bg` and `S.objects` back into `S.pages[S.pageIdx]`; must be called before switching pages or saving
+- `switchPage(idx)` — syncs current, swaps `S.objects`/`S.bg`, resets selection and undo history, re-renders
+- `addPage()` — appends a new blank page, switches to it
+- `deletePage(idx)` — removes a page (blocked if only one remains); switches to nearest neighbour
+- `renderPageBar()` — rebuilds the bottom tab bar DOM from `S.pages`
+- `togglePageBar()` — toggles `body.bar-off` class; bar slides out via `translateY(100%)`; a persistent `#page-restore` button (`Pages ▴`) appears at the bottom-left when the bar is hidden
+
+### Page rename
+Double-click any page tab to rename it via a `prompt()` dialog. The new name is stored in `S.pages[i].name` and the bar re-renders.
+
+### Page bar layout
+- `#page-bar` — fixed bottom strip; has `padding-right: 200px` to clear the Netlify badge
+- `#page-toggle` button is on the **left** of the bar (▾ hides, ▴ shows)
+- `#page-add` button (+) is on the right of the tab list
+- `#page-restore` — fixed bottom-left; shown only when `body.bar-off` is set; clicking it restores the bar
+
+### File format
+`payload()` always returns `{ app: 'inkboard', v: 1, name, pages, pageIdx }`. `loadFile()` handles both:
+- New format: `data.pages` array present → loaded directly
+- Legacy format: `data.objects` present → wrapped in a single-entry `pages` array
 
 ## Color system
 
