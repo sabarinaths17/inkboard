@@ -105,6 +105,24 @@ body.boarddark #brand,body.boarddark #empty{--text:#f2f2f5;--muted2:#b8b8c2;--ho
 .helpgrid kbd{font:500 12px var(--font);background:var(--hover);border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--ctl);white-space:nowrap}
 .helpnote{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;line-height:1.65;color:var(--muted)}
 body.dragover::after{content:"Drop a board (.png or .json) to open it";position:fixed;inset:14px;border:2px dashed var(--accent);border-radius:22px;background:rgba(59,108,246,.06);display:grid;place-items:center;font:600 18px var(--font);color:var(--accent);z-index:30}
+/* page bar */
+#page-bar{position:fixed;bottom:0;left:0;right:0;height:38px;display:flex;align-items:center;gap:0;padding:0 6px 0 8px;border-top:1px solid var(--line);background:var(--glass);-webkit-backdrop-filter:blur(16px) saturate(1.5);backdrop-filter:blur(16px) saturate(1.5);z-index:12;transition:transform .22s ease}
+#page-bar.collapsed{transform:translateY(32px)}
+#page-tabs{display:flex;align-items:center;gap:2px;overflow-x:auto;flex:1;min-width:0}
+#page-tabs::-webkit-scrollbar{display:none}
+.pg-wrap{position:relative;display:inline-flex;align-items:center;flex-shrink:0}
+.pg-tab{font:500 12px var(--font);color:var(--muted);border:0;background:transparent;border-radius:8px;padding:0 10px;height:28px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;transition:background .15s,color .15s}
+.pg-tab:hover{background:var(--hover);color:var(--text)}
+.pg-tab.active{background:var(--on-bg);color:var(--on-fg)}
+.pg-del{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:14px;height:14px;border:0;background:transparent;border-radius:3px;cursor:pointer;opacity:0;display:grid;place-items:center;padding:0;font-size:11px;line-height:1;color:var(--muted)}
+.pg-wrap:hover .pg-del{opacity:.7}
+.pg-del:hover{opacity:1!important;background:var(--hover)}
+#page-add{color:var(--muted);border:0;background:transparent;border-radius:8px;width:28px;height:28px;cursor:pointer;display:grid;place-items:center;transition:background .15s,color .15s;flex-shrink:0;font-size:18px;line-height:1;padding-bottom:1px}
+#page-add:hover{background:var(--hover);color:var(--text)}
+#page-toggle{margin-left:4px;color:var(--muted);border:0;background:transparent;border-radius:8px;width:28px;height:28px;cursor:pointer;display:grid;place-items:center;transition:background .15s;flex-shrink:0;font-size:13px}
+#page-toggle:hover{background:var(--hover)}
+body:not(.bar-off) #dock{bottom:60px}
+body:not(.bar-off) #zoom{bottom:52px}
 .tmplcard{all:unset;box-sizing:border-box;cursor:pointer;padding:11px 14px;border-radius:12px;display:flex;align-items:center;gap:14px;width:100%}
 .tmplcard:hover{background:var(--hover)}
 .tmplcard-thumb{width:62px;height:52px;border-radius:8px;border:1px solid var(--line);flex-shrink:0;display:block}
@@ -174,6 +192,12 @@ body.dragover::after{content:"Drop a board (.png or .json) to open it";position:
 <div id="toast"></div>
 <input type="file" id="file" accept=".png,.json" hidden>
 
+<div id="page-bar" class="ui">
+  <div id="page-tabs"></div>
+  <button id="page-add" title="Add page">+</button>
+  <button id="page-toggle" title="Hide pages">▾</button>
+</div>
+
 <script>
 (() => {
 'use strict';
@@ -230,6 +254,7 @@ const S = {
   objects: [], view: { x: 0, y: 0, k: 1 },
   tool: 'pen', color: 'ink', sz: { stroke: 1, eraser: 1, text: 1 },
   bg: '#ffffff', sel: null, selSet: new Set(), name: defaultName(),
+  pages: null, pageIdx: 0,
 };
 const hist = { u: [], r: [] };
 let draft = null, drag = null, spaceDown = false, editing = null, hiddenObj = null, pending = null;
@@ -681,6 +706,7 @@ function pushUndo() { hist.u.push(snap()); if (hist.u.length > 100) hist.u.shift
 function restore(s) {
   const d = JSON.parse(s);
   S.objects = d.objects; S.bg = d.bg; S.sel = null; S.selSet = new Set();
+  if (S.pages) { S.pages[S.pageIdx].objects = S.objects; S.pages[S.pageIdx].bg = S.bg; }
   syncUI(); changed();
 }
 function undo() { if (!hist.u.length) return; hist.r.push(snap()); restore(hist.u.pop()); }
@@ -694,7 +720,10 @@ function changed() {
   $('#empty').classList.toggle('hide', S.objects.length > 0 || !!draft);
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem('inkboard:auto', JSON.stringify({ name: S.name, bg: S.bg, objects: S.objects, view: S.view })); } catch (e) {}
+    try {
+      const pgs = S.pages ? S.pages.map((p, i) => i === S.pageIdx ? { ...p, bg: S.bg, objects: S.objects } : p) : null;
+      localStorage.setItem('inkboard:auto', JSON.stringify({ name: S.name, bg: S.bg, objects: S.objects, view: S.view, pages: pgs, pageIdx: S.pageIdx }));
+    } catch (e) {}
   }, 400);
 }
 
@@ -766,6 +795,7 @@ function clearBoard() {
   if (editing) editing.commit();
   if (!S.objects.length) { toast('The board is already empty'); return; }
   pushUndo(); S.objects = []; S.sel = null; hoverText = null;
+  if (S.pages) S.pages[S.pageIdx].objects = S.objects;
   changed(); toast('Board cleared. Ctrl+Z brings it back');
 }
 const HELP = [
@@ -832,7 +862,76 @@ function newBoard() {
   if (editing) editing.commit();
   if (S.objects.length) pushUndo();
   S.objects = []; S.sel = null; S.selSet = new Set(); S.name = defaultName(); $('#name').value = S.name;
-  S.view = { x: 0, y: 0, k: 1 }; changed(); toast('New board. Ctrl+Z brings the old one back.');
+  S.pages = [{ id: 'pg-' + Date.now(), name: 'Page 1', bg: S.bg, objects: S.objects }];
+  S.pageIdx = 0; hist.u = []; hist.r = [];
+  S.view = { x: 0, y: 0, k: 1 }; renderPageBar(); changed(); toast('New board. Ctrl+Z brings the old one back.');
+}
+
+/* ---------- pages ---------- */
+function syncPageState() {
+  if (!S.pages) return;
+  S.pages[S.pageIdx].bg = S.bg;
+  S.pages[S.pageIdx].objects = S.objects;
+}
+function switchPage(idx) {
+  if (idx === S.pageIdx) return;
+  syncPageState();
+  S.pageIdx = idx;
+  S.bg = S.pages[idx].bg;
+  S.objects = S.pages[idx].objects;
+  S.sel = null; S.selSet = new Set();
+  hist.u = []; hist.r = [];
+  renderPageBar(); syncUI(); changed();
+}
+function addPage() {
+  syncPageState();
+  const idx = S.pages.length;
+  S.pages.push({ id: 'pg-' + Date.now(), name: 'Page ' + (idx + 1), bg: S.bg, objects: [] });
+  S.pageIdx = idx;
+  S.bg = S.pages[idx].bg;
+  S.objects = S.pages[idx].objects;
+  S.sel = null; S.selSet = new Set();
+  hist.u = []; hist.r = [];
+  renderPageBar(); syncUI(); changed();
+}
+function deletePage(idx) {
+  if (S.pages.length <= 1) { toast('Cannot delete the last page'); return; }
+  syncPageState();
+  S.pages.splice(idx, 1);
+  const ni = Math.min(idx, S.pages.length - 1);
+  S.pageIdx = ni;
+  S.bg = S.pages[ni].bg;
+  S.objects = S.pages[ni].objects;
+  S.sel = null; S.selSet = new Set();
+  hist.u = []; hist.r = [];
+  renderPageBar(); syncUI(); changed();
+}
+function renderPageBar() {
+  if (!S.pages) return;
+  const tabs = $('#page-tabs');
+  tabs.innerHTML = '';
+  S.pages.forEach((pg, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'pg-wrap';
+    const btn = document.createElement('button');
+    btn.className = 'pg-tab' + (i === S.pageIdx ? ' active' : '');
+    btn.textContent = pg.name;
+    btn.style.paddingRight = S.pages.length > 1 ? '20px' : '10px';
+    btn.addEventListener('click', () => switchPage(i));
+    btn.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      const val = prompt('Rename page:', pg.name);
+      if (val && val.trim()) { S.pages[i].name = val.trim(); renderPageBar(); changed(); }
+    });
+    wrap.appendChild(btn);
+    if (S.pages.length > 1) {
+      const del = document.createElement('button');
+      del.className = 'pg-del'; del.textContent = '×'; del.title = 'Delete page';
+      del.addEventListener('click', e => { e.stopPropagation(); deletePage(i); });
+      wrap.appendChild(del);
+    }
+    tabs.appendChild(wrap);
+  });
 }
 
 /* ---------- markdown helpers ---------- */
@@ -1296,7 +1395,11 @@ function toSvg() {
   out.push('</svg>');
   return out.join('\n');
 }
-const payload = () => ({ app: 'inkboard', v: 1, name: S.name, bg: S.bg, objects: S.objects });
+const payload = () => {
+  if (S.pages) { S.pages[S.pageIdx].bg = S.bg; S.pages[S.pageIdx].objects = S.objects; }
+  const pgs = S.pages || [{ id: 'pg-0', name: 'Page 1', bg: S.bg, objects: S.objects }];
+  return { app: 'inkboard', v: 1, name: S.name, pages: pgs, pageIdx: S.pageIdx };
+};
 
 // <png>
 const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -1415,9 +1518,17 @@ async function loadFile(file) {
     if (!data || data.app !== 'inkboard') { toast('Not an Inkboard file'); return; }
     if (editing) editing.commit();
     pushUndo();
-    S.objects = data.objects || []; S.bg = data.bg || '#ffffff'; S.sel = null;
+    if (data.pages) {
+      S.pages = data.pages; S.pageIdx = data.pageIdx || 0;
+    } else {
+      S.pages = [{ id: 'pg-' + Date.now(), name: 'Page 1', bg: data.bg || '#ffffff', objects: data.objects || [] }];
+      S.pageIdx = 0;
+    }
+    S.bg = S.pages[S.pageIdx].bg || '#ffffff';
+    S.objects = S.pages[S.pageIdx].objects || [];
+    S.sel = null; S.selSet = new Set();
     S.name = data.name || file.name.replace(/\.(inkboard\.json|json|png)$/i, '');
-    $('#name').value = S.name; syncUI(); changed(); fitView();
+    $('#name').value = S.name; hist.u = []; hist.r = []; renderPageBar(); syncUI(); changed(); fitView();
     toast('Opened ' + file.name);
   } catch (err) { toast('Could not open that file'); }
 }
@@ -1494,6 +1605,13 @@ $('#helpClose').addEventListener('click', closeHelp);
 $('#help').addEventListener('pointerdown', e => { if (e.target.id === 'help') closeHelp(); });
 $('#folderBtn').addEventListener('click', () => HAS_FS ? pickFolder() : toast('Folder saving needs Chrome or Edge. Files go to Downloads instead.'));
 $('#name').addEventListener('input', e => { S.name = e.target.value; changed(); });
+$('#page-add').addEventListener('click', addPage);
+$('#page-toggle').addEventListener('click', () => {
+  const off = document.body.classList.toggle('bar-off');
+  $('#page-bar').classList.toggle('collapsed', off);
+  $('#page-toggle').textContent = off ? '▴' : '▾';
+  $('#page-toggle').title = off ? 'Show pages' : 'Hide pages';
+});
 if (!HAS_FS) $('#folderBtn').title = 'Folder saving needs Chrome or Edge';
 
 /* ---------- boot ---------- */
@@ -1506,12 +1624,25 @@ $('#helpBtn').innerHTML = ICON.keyboard; $('#helpClose').innerHTML = ICON.close;
 let hadSaved = false;
 try {
   const a = JSON.parse(localStorage.getItem('inkboard:auto') || 'null');
-  if (a && a.objects) { hadSaved = true; S.objects = a.objects; S.bg = a.bg || S.bg; S.name = a.name || S.name; if (a.view) S.view = a.view; }
+  if (a && a.pages) {
+    hadSaved = true;
+    S.pages = a.pages; S.pageIdx = a.pageIdx || 0;
+    S.bg = S.pages[S.pageIdx].bg || '#ffffff';
+    S.objects = S.pages[S.pageIdx].objects || [];
+    S.name = a.name || S.name; if (a.view) S.view = a.view;
+  } else if (a && a.objects) {
+    hadSaved = true;
+    S.pages = [{ id: 'pg-0', name: 'Page 1', bg: a.bg || '#ffffff', objects: a.objects }];
+    S.pageIdx = 0;
+    S.bg = S.pages[0].bg; S.objects = S.pages[0].objects;
+    S.name = a.name || S.name; if (a.view) S.view = a.view;
+  }
 } catch (e) {}
+if (!S.pages) S.pages = [{ id: 'pg-0', name: 'Page 1', bg: S.bg, objects: S.objects }];
 if (!hadSaved && document.body.classList.contains('dark')) S.bg = CHARCOAL;
 $('#name').value = S.name;
 cv.style.cursor = CURSORS[S.tool];
-syncUI(); resize(); changed();
+renderPageBar(); syncUI(); resize(); changed();
 idbGet('dir').then(h => { if (h) { dirHandle = h; folderLabel(); } });
 })();
 </script>
