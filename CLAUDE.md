@@ -7,7 +7,9 @@ Single-file whiteboard canvas app: `inkboard.html`. All logic, styles, and marku
 - **State**: `const S = { objects, view, tool, color, sz, bg, sel, selSet, name }` — single global state object
 - **Rendering**: canvas-based, `paint()` → `drawObj()` per object; selection overlays drawn after
 - **History**: simple array-based undo/redo via `pushUndo()` / `hist.u` / `hist.r`
-- **Persistence**: IndexedDB auto-save via `localStorage`; file system API (`dirHandle`) for folder saves; PNG/JSON export
+- **Persistence**: auto-save to `localStorage` on every change; file system API (`dirHandle`) for folder saves; two export formats:
+  - **PNG** — visual export that also embeds the full board JSON invisibly in the file metadata; re-importing the PNG restores a fully editable board
+  - **`.inkboard.json`** — plain JSON snapshot of `{ name, bg, objects, view }`; re-importing restores all objects as live, dynamic canvas elements
 - **Theme**: defaults to light mode on first open; `setTheme(dark, save?)` toggles UI; board bg follows separately via `setBg()`
 
 ## Object model
@@ -52,7 +54,8 @@ Keybindings: V P E R O A L T H respectively.
 
 `drag.mode`: `pan | draw | shape | erase | move | resize | marquee | connect`
 
-- `marquee`: rubber-band rect drawn on canvas while dragging empty space with select tool; on release selects all objects whose bbox overlaps the rect
+- `pan`: dragging empty canvas in select mode (or space+drag, middle-mouse, hand tool) pans the view; cursor shows `grab`/`grabbing`
+- `marquee`: rubber-band rect drawn on canvas while dragging empty space with select tool; on release selects all objects whose bbox overlaps the rect (legacy — currently empty-space drag starts pan instead)
 - `move` with `drag.moveAll`: set when moving within a multi-selection; each item's original position stored in `drag.moveAll` as `{ obj, snap }`
 - `connect`: started by dragging from a port handle on any rect (no pre-selection needed); draws a draft arrow from that port; snaps endpoint to nearest port on any other rect within 40px; on release creates an arrow object if long enough (>8px); dropped on empty space auto-spawns a new node in the arrow's travel direction
 
@@ -80,6 +83,7 @@ Arrow objects support an optional `cx, cy` control point (quadratic bezier). Whe
 - `nearestPortSnap(p, exclude)` — returns nearest `{id, x, y, obj}` port within 40 world-px on any rect except `exclude`, or null
 - During connect drag, endpoint snaps live to nearest port and a blue glow ring highlights the target rect
 - Arrows created via port-snap store `arrow.srcConn = { obj, port }` and `arrow.dstConn = { obj, port }` as direct object references
+- **Reconnecting existing arrows**: dragging an arrow's p1/p2 handle also snaps to ports (same glow ring); on release sets/clears `srcConn`/`dstConn` for that endpoint
 - `updateConnectedArrows(movedObjs[])` — called during move drag; scans all arrows and updates x1/y1 or x2/y2 for any whose srcConn/dstConn points to a moved rect; uses `portsFor()` to get current port positions
 - Auto-spawn direction: new node appears in the direction the arrow was dragged; `drag.srcPort` determines offset direction and opposite dstConn port (`OPP = {e:'w', w:'e', n:'s', s:'n'}`)
 
