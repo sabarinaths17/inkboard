@@ -159,6 +159,16 @@ Double-click any page tab to rename it via a `prompt()` dialog. The new name is 
 - New format: `data.pages` array present → loaded directly
 - Legacy format: `data.objects` present → wrapped in a single-entry `pages` array
 
+## About modal
+
+An About dialog accessible via the **About** button in the top-right bar. Same overlay pattern as the help modal.
+
+- `#about` — fixed full-screen overlay, `display:grid; place-items:center`; hidden by default (`hidden` attribute)
+- `.aboutcard` — glass card, `width:min(680px,calc(100vw-32px))`, scrollable
+- `openAbout()` / `closeAbout()` — toggle the `hidden` attribute
+- Closes on: × button (`#aboutClose`), Escape key, clicking the backdrop
+- Content: tagline, six capability sections (Drawing Tools, Connections, Multi-page, Save & Export, Templates, Workflow), footer note on auto-save and AI-generated boards
+
 ## Color system
 
 Named colors (`'ink'`, `'accent'`, etc.) resolved at draw time via `resolveColor()`. Swatches in `SWATCHES[]`.
