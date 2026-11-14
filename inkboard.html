@@ -127,9 +127,9 @@ body.bar-off #zoom{bottom:30px!important}
 .pg-tab{font:500 12px var(--font);color:var(--muted);border:0;background:transparent;border-radius:8px;padding:0 10px;height:28px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;transition:background .15s,color .15s}
 .pg-tab:hover{background:var(--hover);color:var(--text)}
 .pg-tab.active{background:var(--on-bg);color:var(--on-fg)}
-.pg-del{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:14px;height:14px;border:0;background:transparent;border-radius:3px;cursor:pointer;opacity:0;display:grid;place-items:center;padding:0;font-size:11px;line-height:1;color:var(--muted)}
-.pg-wrap:hover .pg-del{opacity:.7}
-.pg-del:hover{opacity:1!important;background:var(--hover)}
+#page-del{color:var(--muted);border:0;background:transparent;border-radius:8px;width:28px;height:28px;cursor:pointer;display:grid;place-items:center;transition:background .15s,color .15s;flex-shrink:0;font-size:16px;line-height:1}
+#page-del:hover{background:var(--hover);color:#e5484d}
+#page-del[hidden]{display:none}
 #page-add{color:var(--muted);border:0;background:transparent;border-radius:8px;width:28px;height:28px;cursor:pointer;display:grid;place-items:center;transition:background .15s,color .15s;flex-shrink:0;font-size:18px;line-height:1;padding-bottom:1px}
 #page-add:hover{background:var(--hover);color:var(--text)}
 #page-toggle{margin-right:4px;color:var(--muted);border:0;background:transparent;border-radius:8px;width:28px;height:28px;cursor:pointer;display:grid;place-items:center;transition:background .15s;flex-shrink:0;font-size:13px}
@@ -212,6 +212,7 @@ body:not(.bar-off) #zoom{bottom:52px}
 <div id="page-bar" class="ui">
   <button id="page-toggle" title="Hide pages">▾</button>
   <div id="page-tabs"></div>
+  <button id="page-del" title="Delete current page" hidden>×</button>
   <button id="page-add" title="Add page">+</button>
 </div>
 
@@ -935,7 +936,6 @@ function renderPageBar() {
     const btn = document.createElement('button');
     btn.className = 'pg-tab' + (i === S.pageIdx ? ' active' : '');
     btn.textContent = pg.name;
-    btn.style.paddingRight = S.pages.length > 1 ? '20px' : '10px';
     btn.addEventListener('click', () => switchPage(i));
     btn.addEventListener('dblclick', e => {
       e.stopPropagation();
@@ -943,14 +943,9 @@ function renderPageBar() {
       if (val && val.trim()) { S.pages[i].name = val.trim(); renderPageBar(); changed(); }
     });
     wrap.appendChild(btn);
-    if (S.pages.length > 1) {
-      const del = document.createElement('button');
-      del.className = 'pg-del'; del.textContent = '×'; del.title = 'Delete page';
-      del.addEventListener('click', e => { e.stopPropagation(); deletePage(i); });
-      wrap.appendChild(del);
-    }
     tabs.appendChild(wrap);
   });
+  $('#page-del').hidden = S.pages.length <= 1;
 }
 
 /* ---------- markdown helpers ---------- */
@@ -1634,6 +1629,7 @@ $('#help').addEventListener('pointerdown', e => { if (e.target.id === 'help') cl
 $('#folderBtn').addEventListener('click', () => HAS_FS ? pickFolder() : toast('Folder saving needs Chrome or Edge. Files go to Downloads instead.'));
 $('#name').addEventListener('input', e => { S.name = e.target.value; changed(); });
 $('#page-add').addEventListener('click', addPage);
+$('#page-del').addEventListener('click', () => deletePage(S.pageIdx));
 function togglePageBar() {
   const off = document.body.classList.toggle('bar-off');
   $('#page-bar').classList.toggle('collapsed', off);
