@@ -94,8 +94,16 @@ body.boarddark #brand,body.boarddark #empty{--text:#f2f2f5;--muted2:#b8b8c2;--ho
 #toast{position:fixed;top:72px;left:50%;transform:translate(-50%,-8px);background:var(--on-bg);color:var(--on-fg);font:500 13px var(--font);padding:9px 16px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:20;box-shadow:0 8px 24px rgba(15,15,20,.25)}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 .texted{position:fixed;margin:0;padding:0;border:0;background:transparent;resize:none;overflow:hidden;white-space:pre;outline:1px dashed rgba(59,108,246,.55);outline-offset:4px;font-weight:500;z-index:5}
-#help{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(10,10,14,.30);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
-#help[hidden]{display:none}
+#help,#about{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(10,10,14,.30);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+#help[hidden],#about[hidden]{display:none}
+.aboutcard{width:min(680px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;padding:28px 30px 30px;background:var(--surface)}
+.aboutcard h2{margin:0 0 4px;font:600 18px var(--font);color:var(--text)}
+.aboutcard .about-sub{margin:0 0 22px;font-size:13.5px;color:var(--muted);line-height:1.5}
+.about-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px 28px;margin-bottom:22px}
+.about-feat{display:flex;flex-direction:column;gap:4px}
+.about-feat b{font:600 11px var(--font);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.about-feat ul{margin:0;padding:0 0 0 14px;font-size:13px;color:var(--text);line-height:1.75}
+.about-footer{padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);line-height:1.6}
 .helpcard{width:min(780px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;padding:20px 26px 24px;background:var(--surface)}
 .helphead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .helphead b{font:600 16px var(--font);color:var(--text)}
@@ -146,6 +154,7 @@ body:not(.bar-off) #zoom{bottom:52px}
 
 <div id="topright" class="ui glass">
   <button id="themeBtn" class="btn" title="Light / dark mode"></button>
+  <button id="aboutBtn" class="chip" title="About inkboard">About</button>
   <button id="helpBtn" class="btn" title="Keyboard shortcuts ( ? )"></button>
   <button id="folderBtn" class="chip" title="Choose the folder boards are saved to">
     <svg viewBox="0 0 20 20"><path d="M3 6.5A1.5 1.5 0 014.5 5h3l1.5 1.5h6.5A1.5 1.5 0 0117 8v6.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 013 14.5z"/></svg>
@@ -194,6 +203,7 @@ body:not(.bar-off) #zoom{bottom:52px}
 
 <div id="empty" class="ui"><b>Start drawing</b><br>Press <kbd>P</kbd> for pen, <kbd>R</kbd> box, <kbd>A</kbd> arrow, <kbd>T</kbd> text<br><kbd>Tab</kbd> hides everything for recording<br><kbd>?</kbd> shows every shortcut</div>
 <div id="zoom" class="ui">100%</div>
+<div id="about" hidden><div class="aboutcard glass" role="dialog" aria-label="About inkboard"><div class="helphead"><b>About inkboard</b><button id="aboutClose" class="btn" title="Close"></button></div><p class="about-sub">A fast, single-page whiteboard for drawing, diagramming, and building visual notes — no account, no cloud, everything stays in your browser.</p><div class="about-grid"><div class="about-feat"><b>Drawing tools</b><ul><li>Pen (freehand)</li><li>Shapes — rect, ellipse</li><li>Lines &amp; arrows</li><li>Text with markdown</li><li>Eraser</li></ul></div><div class="about-feat"><b>Connections</b><ul><li>Drag from port dots on any box to wire arrows</li><li>Curved arrows (drag the midpoint)</li><li>Arrows stay attached when you move boxes</li><li>Reconnect endpoints by dragging</li></ul></div><div class="about-feat"><b>Multi-page</b><ul><li>Add unlimited slides via the bottom tab bar</li><li>Rename pages with a double-click</li><li>Collapse the bar while drawing</li><li>Save individual pages or the full board</li></ul></div><div class="about-feat"><b>Save &amp; export</b><ul><li>PNG — embeds full board data invisibly; re-import to continue editing</li><li>SVG — vector, for Figma, Canva, browsers</li><li>PNG transparent — for OBS / video overlays</li><li>.inkboard.json — full board or current page; drag back to restore</li></ul></div><div class="about-feat"><b>Templates</b><ul><li>Kanban column — drag to chain more columns</li><li>Mind map node — drag ports to extend branches</li></ul></div><div class="about-feat"><b>Workflow</b><ul><li>Full keyboard shortcuts (<kbd style="font:500 11px var(--font);background:var(--hover);border:1px solid var(--line);border-radius:5px;padding:1px 6px">?</kbd> to see all)</li><li>Undo / redo without limit</li><li>Multi-select, copy, paste, duplicate</li><li>Presenter mode hides all UI (<kbd style="font:500 11px var(--font);background:var(--hover);border:1px solid var(--line);border-radius:5px;padding:1px 6px">Tab</kbd>)</li><li>Pan with two-finger scroll or space+drag; pinch or Ctrl+scroll to zoom</li></ul></div></div><p class="about-footer">Auto-saves to browser storage on every change. For long-term storage export a .inkboard.json file — drag it back to pick up exactly where you left off. Boards can also be generated externally with any AI and imported here.</p></div></div>
 <div id="help" hidden><div class="helpcard glass" role="dialog" aria-label="Keyboard shortcuts"><div class="helphead"><b>Keyboard shortcuts</b><button id="helpClose" class="btn" title="Close ( Esc )"></button></div><div class="helpgrid" id="helpGrid"></div><div class="helpnote" id="helpNote"></div></div></div>
 <div id="toast"></div>
 <input type="file" id="file" accept=".png,.json" hidden>
@@ -817,6 +827,8 @@ function buildHelp() {
 }
 const openHelp = () => { $('#help').hidden = false; };
 const closeHelp = () => { $('#help').hidden = true; };
+const openAbout = () => { $('#about').hidden = false; };
+const closeAbout = () => { $('#about').hidden = true; };
 function setBg(c) {
   pushUndo();
   const wasDark = isDark(S.bg), nowDark = isDark(c);
@@ -1293,6 +1305,7 @@ addEventListener('keydown', e => {
   const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
   if (mod && (k === 's' || k === 'o')) { e.preventDefault(); k === 's' ? save('png') : openFile(); return; }
   if (inField) { if (e.key === 'Enter' && e.target.id === 'name') e.target.blur(); return; }
+  if (!$('#about').hidden) { if (e.key === 'Escape') closeAbout(); return; }
   if (!$('#help').hidden) { if (e.key === 'Escape' || e.key === '?' || (e.code === 'Slash' && e.shiftKey)) closeHelp(); return; }
   if (mod) {
     if (k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
@@ -1612,6 +1625,9 @@ $('#themeBtn').addEventListener('click', () => {
   const want = dark ? CHARCOAL : WHITE;
   if (S.bg !== want) setBg(want);   // dark mode brings a dark canvas, ink flips to white
 });
+$('#aboutBtn').addEventListener('click', openAbout);
+$('#aboutClose').addEventListener('click', closeAbout);
+$('#about').addEventListener('pointerdown', e => { if (e.target.id === 'about') closeAbout(); });
 $('#helpBtn').addEventListener('click', openHelp);
 $('#helpClose').addEventListener('click', closeHelp);
 $('#help').addEventListener('pointerdown', e => { if (e.target.id === 'help') closeHelp(); });
@@ -1630,7 +1646,7 @@ if (!HAS_FS) $('#folderBtn').title = 'Folder saving needs Chrome or Edge';
 
 /* ---------- boot ---------- */
 build();
-$('#helpBtn').innerHTML = ICON.keyboard; $('#helpClose').innerHTML = ICON.close; buildHelp();
+$('#helpBtn').innerHTML = ICON.keyboard; $('#helpClose').innerHTML = ICON.close; $('#aboutClose').innerHTML = ICON.close; buildHelp();
 {
   let ui = null; try { ui = localStorage.getItem('inkboard:ui'); } catch (e) {}
   setTheme(ui ? ui === 'dark' : false, false);
