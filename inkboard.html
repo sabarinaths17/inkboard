@@ -37,8 +37,11 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 body.present .ui{opacity:0;pointer-events:none}
 /* toolbar-hidden: hides dock + topright for clean glance view (\  key toggles, Esc restores) */
 body.toolbar-hidden #dock,body.toolbar-hidden #topright{display:none}
-/* teach mode: hides dock, shows just topright for exit button */
-body.teach #dock{display:none}
+/* dock z-index so it appears above page-bar when sliding up */
+#dock{z-index:15;transition:transform .22s ease}
+/* auto-hide dock: slides out of view, peeks back when dock-peek is set */
+body.dock-auto #dock{transform:translateX(-50%) translateY(calc(100% + 46px))}
+body.dock-auto.dock-peek #dock,body.dock-auto #dock:hover{transform:translateX(-50%) translateY(0)}
 /* active state for mode toggle chips */
 .chip.on{background:rgba(59,108,246,.12);color:#3b6cf6}
 /* teach mode ripple */
@@ -164,13 +167,9 @@ body:not(.bar-off) #zoom{bottom:52px}
 <div id="topright" class="ui glass">
   <button id="themeBtn" class="btn" title="Light / dark mode"></button>
   <button id="readonlyBtn" class="chip" title="Read-only view — pan/zoom only, no editing">View</button>
-  <button id="teachBtn" class="chip" title="Teach mode — click anywhere to highlight, board is read-only">Teach</button>
-  <button id="aboutBtn" class="chip" title="About inkboard">About</button>
+  <button id="teachBtn" class="chip" title="Teach mode — laser pointer + collapsible toolbar">Teach</button>
+  <button id="aboutBtn" class="btn" title="About inkboard"><svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M10 7v.4M10 10v3.5"/></svg></button>
   <button id="helpBtn" class="btn" title="Keyboard shortcuts ( ? )"></button>
-  <button id="folderBtn" class="chip" title="Choose the folder boards are saved to">
-    <svg viewBox="0 0 20 20"><path d="M3 6.5A1.5 1.5 0 014.5 5h3l1.5 1.5h6.5A1.5 1.5 0 0117 8v6.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 013 14.5z"/></svg>
-    <span id="folderLabel">Choose folder</span>
-  </button>
   <div class="savewrap">
     <button id="tmpBtn" class="chip" title="Insert a template">
       <svg viewBox="0 0 20 20"><path d="M3 3h6v6H3zm0 8h6v6H3zm8-8h6v6h-6zm0 8h6v6h-6z"/></svg>
@@ -268,6 +267,8 @@ const ICON = {
   trash: svgIcon('<path d="M4.5 6h11M8 6V4.5h4V6M6 6l.6 9.2a1 1 0 001 .8h4.8a1 1 0 001-.8L14 6M8.5 9v4M11.5 9v4"/>'),
   keyboard: svgIcon('<rect x="2.5" y="5" width="15" height="10" rx="2.2"/><path d="M5.5 8.2h.01M8.5 8.2h.01M11.5 8.2h.01M14.5 8.2h.01M6.5 11.8h7"/>'),
   close: svgIcon('<path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/>'),
+  laser: svgIcon('<circle cx="10" cy="10" r="2"/><circle cx="10" cy="10" r="4.5" opacity=".45"/><circle cx="10" cy="10" r="7" opacity=".2"/>'),
+  pin: svgIcon('<path d="M5 15l3.5-3.5M9.5 2.5l8 8-2 .5-2 4-5.5-5.5.5-2z"/>'),
   moon: svgIcon('<path d="M16 11.5A6.5 6.5 0 018.5 4 6.5 6.5 0 1016 11.5z"/>'),
   sun: svgIcon('<circle cx="10" cy="10" r="3.5"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4"/>'),
 };
@@ -275,8 +276,9 @@ const TOOLS = [
   ['select', 'Select', 'V'], ['pen', 'Pen', 'P'], ['eraser', 'Eraser', 'E'],
   ['rect', 'Box', 'R'], ['ellipse', 'Circle', 'O'], ['arrow', 'Arrow', 'A'],
   ['line', 'Line', 'L'], ['text', 'Text', 'T'], ['hand', 'Pan', 'H'],
+  ['laser', 'Laser pointer', 'F'],
 ];
-const KEYMAP = { v: 'select', p: 'pen', e: 'eraser', r: 'rect', o: 'ellipse', a: 'arrow', l: 'line', t: 'text', h: 'hand' };
+const KEYMAP = { v: 'select', p: 'pen', e: 'eraser', r: 'rect', o: 'ellipse', a: 'arrow', l: 'line', t: 'text', h: 'hand', f: 'laser' };
 
 /* ---------- state ---------- */
 const S = {
@@ -779,7 +781,7 @@ function fitView() {
 }
 
 /* ---------- tools ---------- */
-const CURSORS = { select: 'default', pen: 'crosshair', eraser: 'none', rect: 'crosshair', ellipse: 'crosshair', line: 'crosshair', arrow: 'crosshair', text: 'text', hand: 'grab' };
+const CURSORS = { select: 'default', pen: 'crosshair', eraser: 'none', rect: 'crosshair', ellipse: 'crosshair', line: 'crosshair', arrow: 'crosshair', text: 'text', hand: 'grab', laser: 'crosshair' };
 function setTool(t) {
   if (editing) editing.commit();
   S.tool = t;
@@ -874,12 +876,23 @@ function setReadonly(on) {
   if (editing) editing.commit();
   S.sel = null; S.selSet = new Set(); render();
 }
+function setDockAuto(on, save = true) {
+  document.body.classList.toggle('dock-auto', on);
+  if ($('#dockPinBtn')) $('#dockPinBtn').classList.toggle('on', !on);
+  if (save) try { localStorage.setItem('inkboard:dock', on ? 'auto' : 'sticky'); } catch (e) {}
+}
 function setTeach(on) {
   document.body.classList.toggle('teach', on);
   const btn = $('#teachBtn');
   btn.classList.toggle('on', on);
   btn.textContent = on ? 'Exit Teach' : 'Teach';
-  if (on) { document.body.classList.remove('readonly'); const rb = $('#readonlyBtn'); rb.classList.remove('on'); rb.textContent = 'View'; setTool('select'); }
+  if (on) {
+    document.body.classList.remove('readonly'); const rb = $('#readonlyBtn'); rb.classList.remove('on'); rb.textContent = 'View';
+    setDockAuto(true, false); setTool('laser');
+  } else {
+    const saved = localStorage.getItem('inkboard:dock');
+    setDockAuto(saved === 'auto', false);
+  }
   if (editing) editing.commit();
   S.sel = null; S.selSet = new Set(); render();
 }
@@ -1052,9 +1065,9 @@ cv.addEventListener('pointerdown', e => {
   if (editing) editing.commit();
   closeMenu();
   cv.setPointerCapture(e.pointerId);
-  // teach/readonly: show ripple (teach only) and allow pan only
-  if (document.body.classList.contains('teach') || document.body.classList.contains('readonly')) {
-    if (document.body.classList.contains('teach')) teachPulse(e.clientX, e.clientY);
+  // readonly: allow laser ripple + pan, block all editing
+  if (document.body.classList.contains('readonly')) {
+    if (S.tool === 'laser') teachPulse(e.clientX, e.clientY);
     if (e.button === 0 || e.button === 1) {
       drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: S.view.x, vy: S.view.y };
       cv.style.cursor = 'grabbing';
@@ -1126,6 +1139,10 @@ cv.addEventListener('pointerdown', e => {
       drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: S.view.x, vy: S.view.y };
       cv.style.cursor = 'grabbing'; break;
     }
+    case 'laser':
+      teachPulse(e.clientX, e.clientY);
+      drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: S.view.x, vy: S.view.y };
+      break;
   }
 });
 // Pen strokes are wiped away only where the eraser touches them (the stroke splits in two).
@@ -1351,12 +1368,8 @@ addEventListener('keydown', e => {
   if (!$('#about').hidden) { if (e.key === 'Escape') closeAbout(); return; }
   if (!$('#help').hidden) { if (e.key === 'Escape' || e.key === '?' || (e.code === 'Slash' && e.shiftKey)) closeHelp(); return; }
   if (e.key === '\\') { e.preventDefault(); toggleToolbar(); return; }
-  const isViewOnly = document.body.classList.contains('readonly') || document.body.classList.contains('teach');
-  if (isViewOnly) {
-    if (e.key === 'Escape') {
-      if (document.body.classList.contains('teach')) { setTeach(false); return; }
-      if (document.body.classList.contains('readonly')) { setReadonly(false); return; }
-    }
+  if (document.body.classList.contains('readonly')) {
+    if (e.key === 'Escape') { setReadonly(false); return; }
     if (e.key === 'Tab') { e.preventDefault(); togglePresent(); return; }
     if (e.key === '?' || (e.code === 'Slash' && e.shiftKey)) { openHelp(); return; }
     return;
@@ -1407,6 +1420,8 @@ function build() {
   add(`<button class="btn" id="redoBtn" data-tip="Redo  Ctrl+Y">${ICON.redo}</button>`);
   add(`<button class="btn" id="clearBtn" data-tip="Clear board  Ctrl+Del">${ICON.trash}</button>`);
   add(`<button class="btn" id="presentBtn" data-tip="Presenter mode  Tab">${ICON.present}</button>`);
+  add('<span class="sep"></span>');
+  add(`<button class="btn" id="dockPinBtn" data-tip="Auto-hide toolbar">${ICON.pin}</button>`);
 }
 function syncUI() {
   dock.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === S.tool));
@@ -1543,7 +1558,7 @@ function idb() {
 async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); } catch (e) { return null; } }
 async function idbSet(k, v) { try { const db = await idb(); await new Promise(res => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = res; }); } catch (e) {} }
 
-function folderLabel() { $('#folderLabel').textContent = dirHandle ? dirHandle.name : 'Choose folder'; }
+function folderLabel() { const el = $('#folderLabel'); if (el) el.textContent = dirHandle ? dirHandle.name : 'Choose folder'; }
 async function pickFolder() {
   if (!HAS_FS) return false;
   try {
@@ -1687,12 +1702,17 @@ $('#themeBtn').addEventListener('click', () => {
 $('#aboutBtn').addEventListener('click', openAbout);
 $('#readonlyBtn').addEventListener('click', () => setReadonly(!document.body.classList.contains('readonly')));
 $('#teachBtn').addEventListener('click', () => setTeach(!document.body.classList.contains('teach')));
+document.addEventListener('click', e => { if (e.target.id === 'dockPinBtn' || e.target.closest('#dockPinBtn')) setDockAuto(!document.body.classList.contains('dock-auto')); });
+// dock auto-hide: reveal when mouse near bottom of screen
+addEventListener('mousemove', e => {
+  if (!document.body.classList.contains('dock-auto')) return;
+  document.body.classList.toggle('dock-peek', e.clientY > window.innerHeight - 72);
+});
 $('#aboutClose').addEventListener('click', closeAbout);
 $('#about').addEventListener('pointerdown', e => { if (e.target.id === 'about') closeAbout(); });
 $('#helpBtn').addEventListener('click', openHelp);
 $('#helpClose').addEventListener('click', closeHelp);
 $('#help').addEventListener('pointerdown', e => { if (e.target.id === 'help') closeHelp(); });
-$('#folderBtn').addEventListener('click', () => HAS_FS ? pickFolder() : toast('Folder saving needs Chrome or Edge. Files go to Downloads instead.'));
 $('#name').addEventListener('input', e => { S.name = e.target.value; changed(); });
 $('#page-add').addEventListener('click', addPage);
 $('#page-del').addEventListener('click', () => deletePage(S.pageIdx));
@@ -1704,7 +1724,6 @@ function togglePageBar() {
 }
 $('#page-toggle').addEventListener('click', togglePageBar);
 $('#page-restore').addEventListener('click', togglePageBar);
-if (!HAS_FS) $('#folderBtn').title = 'Folder saving needs Chrome or Edge';
 
 /* ---------- boot ---------- */
 build();
@@ -1735,7 +1754,8 @@ if (!hadSaved && document.body.classList.contains('dark')) S.bg = CHARCOAL;
 $('#name').value = S.name;
 cv.style.cursor = CURSORS[S.tool];
 renderPageBar(); syncUI(); resize(); changed();
-idbGet('dir').then(h => { if (h) { dirHandle = h; folderLabel(); } });
+idbGet('dir').then(h => { if (h) dirHandle = h; });
+{ let d = null; try { d = localStorage.getItem('inkboard:dock'); } catch(e) {} if (d === 'auto') setDockAuto(true, false); }
 })();
 </script>
 </body>
