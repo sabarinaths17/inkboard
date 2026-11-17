@@ -7,8 +7,9 @@ Single-file whiteboard canvas app: `inkboard.html`. All logic, styles, and marku
 - **State**: `const S = { objects, view, tool, color, sz, bg, sel, selSet, name, pages, pageIdx }` — single global state object
 - **Rendering**: canvas-based, `paint()` → `drawObj()` per object; selection overlays drawn after
 - **History**: simple array-based undo/redo via `pushUndo()` / `hist.u` / `hist.r`
-- **Persistence**: auto-save to `localStorage` on every change (saves all pages); file system API (`dirHandle`) for folder saves; two export formats:
-  - **PNG** — visual export that also embeds the full board JSON (all pages) invisibly in the file metadata; re-importing restores a fully editable multi-page board
+- **Persistence**: auto-save to `localStorage` on every change (saves all pages); file system API (`dirHandle`) for folder saves; three export formats:
+  - **PNG** — visual export that also embeds the full board JSON (all pages) invisibly in the file metadata; re-importing restores a fully editable multi-page board; fills `S.bg || WHITE` as background
+  - **JPEG** — `toJpeg()` — smaller file, always solid background (`S.bg || WHITE`), no embedded JSON (not re-importable); quality 0.92
   - **`.inkboard.json`** — JSON snapshot of `{ app, v, name, pages, pageIdx }`; two save options in the Save menu:
     - **All pages** — full board including every page
     - **Current page only** — single-page snapshot wrapped in the same format (`pages` array with one entry, `pageIdx: 0`)

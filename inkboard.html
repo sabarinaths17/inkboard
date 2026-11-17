@@ -219,6 +219,7 @@ body:not(.bar-off) #zoom{bottom:52px}
     <div id="menu" class="glass menu" hidden>
       <button data-save="png"><b>PNG</b><span>Opens in Paint, and re-editable here (Ctrl+S)</span></button>
       <button data-save="png-t"><b>PNG, transparent</b><span>For layering over video in OBS or an editor</span></button>
+      <button data-save="jpeg"><b>JPEG</b><span>Smaller file, always has solid background</span></button>
       <button data-save="svg"><b>SVG</b><span>Vector, for Figma, Canva, browsers</span></button>
       <button data-save="json"><b>All pages</b><span>Every slide in one .inkboard.json</span></button>
       <button data-save="json-page"><b>Current page only</b><span>Just this slide as .inkboard.json</span></button>
@@ -1837,11 +1838,22 @@ function toPng(transparent) {
   const c = document.createElement('canvas');
   c.width = Math.round(b.w * s); c.height = Math.round(b.h * s);
   const g = c.getContext('2d');
-  if (!transparent) { g.fillStyle = S.bg; g.fillRect(0, 0, c.width, c.height); }
+  if (!transparent) { g.fillStyle = S.bg || WHITE; g.fillRect(0, 0, c.width, c.height); }
   g.scale(s, s); g.translate(-b.x, -b.y);
   for (const o of S.objects) drawObj(g, o);
   return new Promise(res => c.toBlob(res, 'image/png'))
     .then(blob => embedInPng(blob, 'inkboard', JSON.stringify(payload())));
+}
+function toJpeg() {
+  const b = contentBounds();
+  let s = 2; const m = Math.max(b.w, b.h) * s; if (m > 8000) s *= 8000 / m;
+  const c = document.createElement('canvas');
+  c.width = Math.round(b.w * s); c.height = Math.round(b.h * s);
+  const g = c.getContext('2d');
+  g.fillStyle = S.bg || WHITE; g.fillRect(0, 0, c.width, c.height);
+  g.scale(s, s); g.translate(-b.x, -b.y);
+  for (const o of S.objects) drawObj(g, o);
+  return new Promise(res => c.toBlob(res, 'image/jpeg', 0.92));
 }
 
 /* ---------- folder + files ---------- */
@@ -1893,6 +1905,7 @@ async function save(kind) {
   let blob, name;
   try {
     if (kind === 'png' || kind === 'png-t') { blob = await toPng(kind === 'png-t'); name = base + (kind === 'png-t' ? '-transparent' : '') + '.png'; }
+    else if (kind === 'jpeg') { blob = await toJpeg(); name = base + '.jpg'; }
     else if (kind === 'svg') { blob = new Blob([toSvg()], { type: 'image/svg+xml' }); name = base + '.svg'; }
     else if (kind === 'json-page') {
       const pg = S.pages[S.pageIdx];
