@@ -878,7 +878,7 @@ function setReadonly(on) {
 }
 function setDockAuto(on, save = true) {
   document.body.classList.toggle('dock-auto', on);
-  if ($('#dockPinBtn')) $('#dockPinBtn').classList.toggle('on', !on);
+  if ($('#dockPinBtn')) { const b = $('#dockPinBtn'); b.classList.toggle('on', on); b.dataset.tip = on ? 'Pin toolbar (auto-hide on)' : 'Auto-hide toolbar'; }
   if (save) try { localStorage.setItem('inkboard:dock', on ? 'auto' : 'sticky'); } catch (e) {}
 }
 function setTeach(on) {
