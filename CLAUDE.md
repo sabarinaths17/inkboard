@@ -146,8 +146,25 @@ Text objects render Obsidian-style inline markdown via `drawMdText(c, o)`:
 - **Any other object**: Copy, Duplicate, Bring to Front, Send to Back, Delete
 - **Multi-selection** (right-click within selSet): Copy, Duplicate, Delete
 - `bringToFront(o)` / `sendToBack(o)` — move object to end / start of `S.objects` array
-- `#imgInput` — hidden `<input type="file" accept="image/*">` triggered by "Insert Image…"; on change calls `addImageFromSrc`
+- `#imgInput` — hidden `<input type="file" accept="image/*">` triggered by "Insert Image…" or "New → Insert image…"; on change calls `addImageFromSrc`
 - The former `#imgActions` floating bar (Crop / Reset buttons) has been removed; all image actions are now in the context menu
+
+## New button (topright)
+
+`#newBtn` is a dropdown (`.savewrap` pattern) with three options:
+- **New blank page** — calls `addPage()`, stays on current page
+- **Insert image…** — triggers `#imgInput`, inserts image into current tab
+- **Open board…** — calls `openBoardInNewTab()`: opens a `.inkboard.json` or embedded-PNG board and **appends** its pages to the current board, then switches to the first newly added page; uses `#boardInput` as fallback for browsers without `showOpenFilePicker`
+
+`closeMenu()` also hides `#newMenu`.
+
+## Clipboard / paste
+
+`Ctrl+V` is handled entirely by the `paste` event (not keydown). The handler:
+1. Checks `clipboardData.items` for an image → calls `addImageFromSrc`
+2. Falls through to internal `clipboard` array → calls `pasteClipboard()`
+
+The keydown Ctrl+V handler was removed so the browser fires the `paste` event naturally.
 
 ## Clipboard
 
