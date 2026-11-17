@@ -49,8 +49,9 @@ Keybindings: V P E R O A L T H respectively.
 | 1–6 | Set colour |
 | Space | Hold to pan |
 | Tab | Presenter mode |
-| Esc | Deselect / exit presenter |
+| Esc | Deselect / exit presenter / exit teach or view mode |
 | ? | Help |
+| `\` | Toggle toolbar hide (glance mode) |
 
 ## Drag modes
 
@@ -152,6 +153,7 @@ Double-click any page tab to rename it via a `prompt()` dialog. The new name is 
 - `#page-bar` — fixed bottom strip; has `padding-right: 200px` to clear the Netlify badge
 - `#page-toggle` button is on the **left** of the bar (▾ hides, ▴ shows)
 - `#page-add` button (+) is on the right of the tab list
+- `#page-del` — single shared delete button at the right of the tab strip; hidden when only one page exists; always deletes `S.pageIdx`; replaces the former per-tab × buttons (which were too easy to mis-click)
 - `#page-restore` — fixed bottom-left; shown only when `body.bar-off` is set; clicking it restores the bar
 
 ### File format
@@ -168,6 +170,30 @@ An About dialog accessible via the **About** button in the top-right bar. Same o
 - `openAbout()` / `closeAbout()` — toggle the `hidden` attribute
 - Closes on: × button (`#aboutClose`), Escape key, clicking the backdrop
 - Content: tagline, six capability sections (Drawing Tools, Connections, Multi-page, Save & Export, Templates, Workflow), footer note on auto-save and AI-generated boards
+
+## Presentation modes
+
+Three view modes in addition to the existing Tab presenter mode:
+
+### Toolbar hide (`\` key)
+- Toggles `body.toolbar-hidden` — hides `#dock` and `#topright` entirely for a clean glance at the board
+- `Esc` or `\` again restores the UI
+- Distinct from Tab (presenter): Tab hides all `.ui` elements; `\` hides only dock + topright, keeping the page bar and zoom visible
+
+### Read-only mode (View button, topright)
+- Toggles `body.readonly`; button gains `.on` class (blue highlight) when active
+- In pointerdown: all tool interactions blocked; left/middle click drag still pans
+- Keyboard: all editing shortcuts blocked; Tab (presenter), `?` (help), `\` (toolbar hide) still work
+- `setReadonly(on)` — sets the class + button state; exits teach mode if active
+- Exit: click View again or press `Esc`
+
+### Teach mode (Teach button, topright)
+- Toggles `body.teach`; button gains `.on` class when active
+- Same editing block as read-only, plus: every pointerdown fires `teachPulse(x, y)` — appends a `.teach-ring` div at the click coordinates that expands and fades via `@keyframes teach-pop`
+- `#dock` is hidden in teach mode (CSS); topright stays visible for the exit button
+- `setTeach(on)` — sets classes + button state; exits readonly if active; switches tool to `'select'`
+- `teachPulse(x, y)` — creates a `<div class="teach-ring">` at fixed `(x, y)`, appended to `<body>`; self-removes on `animationend`
+- Exit: click Teach again or press `Esc`
 
 ## Color system
 
