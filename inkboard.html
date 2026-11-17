@@ -1623,8 +1623,11 @@ cv.addEventListener('contextmenu', e => {
     );
     showCtxMenu(e.clientX, e.clientY, items);
   } else {
-    const items = [{ label: '🖼  Insert Image…', fn: () => $('#imgInput').click() }];
-    if (clipboard && clipboard.length) items.push({ label: 'Paste', fn: pasteClipboard });
+    const items = [
+      { label: '🖼  Insert Image…', fn: () => $('#imgInput').click() },
+      { label: '📋  Paste Image', fn: pasteFromClipboard },
+    ];
+    if (clipboard && clipboard.length) items.push({ label: 'Paste objects', fn: pasteClipboard });
     items.push('-');
     if (S.objects.length) {
       items.push({ label: 'Select All', fn: () => { S.selSet = new Set(S.objects); S.sel = null; render(); } });
@@ -1671,6 +1674,7 @@ addEventListener('keydown', e => {
     else if (k === 'y') { e.preventDefault(); redo(); }
     else if (k === 'a') { e.preventDefault(); if (S.objects.length) { S.selSet = new Set(S.objects); S.sel = null; render(); } }
     else if (k === 'c') { e.preventDefault(); copySelected(); }
+    else if (k === 'v') { e.preventDefault(); pasteFromClipboard(); }
     else if (k === 'd') { e.preventDefault(); duplicate(); }
     else if (k === '0') { e.preventDefault(); S.view = { x: 0, y: 0, k: 1 }; render(); }
     else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); clearBoard(); }
@@ -1947,6 +1951,23 @@ addEventListener('drop', e => {
     readAsDataURL(file).then(src => addImageFromSrc(src, pt));
   } else { loadFile(file); }
 });
+async function pasteFromClipboard() {
+  if (editing || document.body.classList.contains('readonly')) return;
+  if (navigator.clipboard && navigator.clipboard.read) {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imgType = item.types.find(t => t.startsWith('image/'));
+        if (imgType) {
+          const blob = await item.getType(imgType);
+          const src = await readAsDataURL(blob);
+          addImageFromSrc(src); return;
+        }
+      }
+    } catch(err) { /* permission denied or no image — fall through */ }
+  }
+  pasteClipboard();
+}
 document.addEventListener('paste', async e => {
   if (editing || document.body.classList.contains('readonly')) return;
   for (const item of (e.clipboardData?.items || [])) {
