@@ -28,9 +28,9 @@ Each object in `S.objects` has a `type` field: `pen | rect | ellipse | line | ar
 
 ## Tools
 
-`select | pen | eraser | rect | ellipse | arrow | line | text | hand`
+`select | pen | eraser | rect | ellipse | arrow | line | text | hand | laser`
 
-Keybindings: V P E R O A L T H respectively.
+Keybindings: V P E R O A L T H F respectively.
 
 ## Keyboard shortcuts implemented
 
@@ -163,7 +163,7 @@ Double-click any page tab to rename it via a `prompt()` dialog. The new name is 
 
 ## About modal
 
-An About dialog accessible via the **About** button in the top-right bar. Same overlay pattern as the help modal.
+An About dialog accessible via the **ℹ icon button** (`#aboutBtn`) in the top-right bar — icon only, no text label. Same overlay pattern as the help modal.
 
 - `#about` — fixed full-screen overlay, `display:grid; place-items:center`; hidden by default (`hidden` attribute)
 - `.aboutcard` — glass card, `width:min(680px,calc(100vw-32px))`, scrollable
@@ -181,19 +181,38 @@ Three view modes in addition to the existing Tab presenter mode:
 - Distinct from Tab (presenter): Tab hides all `.ui` elements; `\` hides only dock + topright, keeping the page bar and zoom visible
 
 ### Read-only mode (View button, topright)
-- Toggles `body.readonly`; button gains `.on` class (blue highlight) when active
+- Toggles `body.readonly`; button gains `.on` class and label changes to "Exit View" when active
 - In pointerdown: all tool interactions blocked; left/middle click drag still pans
 - Keyboard: all editing shortcuts blocked; Tab (presenter), `?` (help), `\` (toolbar hide) still work
 - `setReadonly(on)` — sets the class + button state; exits teach mode if active
 - Exit: click View again or press `Esc`
 
 ### Teach mode (Teach button, topright)
-- Toggles `body.teach`; button gains `.on` class when active
-- Same editing block as read-only, plus: every pointerdown fires `teachPulse(x, y)` — appends a `.teach-ring` div at the click coordinates that expands and fades via `@keyframes teach-pop`
-- `#dock` is hidden in teach mode (CSS); topright stays visible for the exit button
-- `setTeach(on)` — sets classes + button state; exits readonly if active; switches tool to `'select'`
-- `teachPulse(x, y)` — creates a `<div class="teach-ring">` at fixed `(x, y)`, appended to `<body>`; self-removes on `animationend`
-- Exit: click Teach again or press `Esc`
+- Toggles `body.teach`; button gains `.on` class and label changes to "Exit Teach" when active
+- **Not a lock**: editing is fully allowed in teach mode; it is a preset that auto-selects the Laser tool and collapses the dock (auto-hide); teacher can expand the toolbar, switch to any tool, draw/annotate, then collapse again
+- `setTeach(on)` — sets class + button text; exits readonly if active; calls `setDockAuto(true, false)` and `setTool('laser')`; on exit restores saved dock preference from `localStorage`
+- Exit: click "Exit Teach" button or press `Esc`
+
+### Laser pointer tool (`F` key)
+- Tool id: `'laser'`; added to `TOOLS`, `KEYMAP` (`f: 'laser'`), `CURSORS` (`crosshair`)
+- Icon: three concentric rings (SVG, `ICON.laser`)
+- On `pointerdown`: calls `teachPulse(e.clientX, e.clientY)` then sets `drag.mode = 'pan'` — click shows ripple, drag pans
+- Available in all modes including readonly (ripple fires even in readonly when laser tool is active)
+- Auto-selected when entering teach mode
+
+### Dock auto-hide
+- `body.dock-auto`: dock slides out of view via `transform: translateX(-50%) translateY(calc(100% + 46px))`; `z-index:15` keeps it above the page bar when visible
+- JS `mousemove` listener adds/removes `body.dock-peek` when mouse Y > `window.innerHeight - 72`; CSS `body.dock-auto.dock-peek #dock` snaps it back to `translateX(-50%) translateY(0)`
+- Pin button (`#dockPinBtn`, `ICON.pin`) at the far right of the dock toggles sticky ↔ auto-hide; `.on` class = sticky (not auto-hide)
+- `setDockAuto(on, save?)` — toggles class, updates pin button state, optionally saves to `localStorage` (`inkboard:dock`)
+- Preference loaded on init from `localStorage.getItem('inkboard:dock') === 'auto'`
+- Teach mode forces `dock-auto` on entry; restores saved preference on exit
+
+## Topright bar
+
+Buttons left-to-right: theme toggle, **View**, **Teach**, **ℹ** (About), **Templates**, **Save**.
+- Folder chooser button was removed — `dirHandle` and `pickFolder()` are still used internally for folder saves but have no UI entry point; the picker triggers automatically the first time a folder save is attempted
+- View and Teach buttons change their label to "Exit View" / "Exit Teach" when active (`setReadonly` / `setTeach` update `btn.textContent`)
 
 ## Color system
 
