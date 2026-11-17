@@ -137,6 +137,18 @@ Text objects render Obsidian-style inline markdown via `drawMdText(c, o)`:
 - `K` shortcut starts crop when image selected
 - `#imgActions` floating bar: **✂ Crop** (always shown for images) + **↺ Reset** (shown when crop exists); positioned via `updateImgActions()` called in `paint()`
 
+## Right-click context menu
+
+`#ctx-menu` — dynamic fixed-position menu built by `showCtxMenu(cx, cy, items[])`. Items are `{ label, fn, danger? }` or `'-'` for a separator. Closes on outside click, Escape, or any item action.
+
+- **Empty canvas**: Insert Image… (opens `#imgInput` file picker), Paste (if clipboard non-empty), Select All, Clear Board
+- **Image object**: Crop (K), Reset Crop (if cropped), Copy, Duplicate, Bring to Front, Send to Back, Delete
+- **Any other object**: Copy, Duplicate, Bring to Front, Send to Back, Delete
+- **Multi-selection** (right-click within selSet): Copy, Duplicate, Delete
+- `bringToFront(o)` / `sendToBack(o)` — move object to end / start of `S.objects` array
+- `#imgInput` — hidden `<input type="file" accept="image/*">` triggered by "Insert Image…"; on change calls `addImageFromSrc`
+- The former `#imgActions` floating bar (Crop / Reset buttons) has been removed; all image actions are now in the context menu
+
 ## Clipboard
 
 `clipboard` is an array of cloned objects (supports multi-select copy/paste). Paste offsets each by 24px.
