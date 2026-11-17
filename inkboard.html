@@ -35,6 +35,15 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 }
 .ui{transition:opacity .25s ease}
 body.present .ui{opacity:0;pointer-events:none}
+/* toolbar-hidden: hides dock + topright for clean glance view (\  key toggles, Esc restores) */
+body.toolbar-hidden #dock,body.toolbar-hidden #topright{display:none}
+/* teach mode: hides dock, shows just topright for exit button */
+body.teach #dock{display:none}
+/* active state for mode toggle chips */
+.chip.on{background:rgba(59,108,246,.12);color:#3b6cf6}
+/* teach mode ripple */
+.teach-ring{position:fixed;pointer-events:none;border-radius:50%;border:2.5px solid #3b6cf6;width:36px;height:36px;transform:translate(-50%,-50%) scale(0.3);opacity:1;z-index:9999;animation:teach-pop .65s ease-out forwards}
+@keyframes teach-pop{0%{transform:translate(-50%,-50%) scale(0.3);opacity:1}60%{opacity:.7}100%{transform:translate(-50%,-50%) scale(2.6);opacity:0}}
 
 /* brand / name and the empty hint sit on the board, so they follow the board colour, not the UI theme */
 #brand,#empty{--text:#1b1b1f;--muted2:#55555f;--hover:rgba(15,15,20,.06)}
@@ -154,6 +163,8 @@ body:not(.bar-off) #zoom{bottom:52px}
 
 <div id="topright" class="ui glass">
   <button id="themeBtn" class="btn" title="Light / dark mode"></button>
+  <button id="readonlyBtn" class="chip" title="Read-only view — pan/zoom only, no editing">View</button>
+  <button id="teachBtn" class="chip" title="Teach mode — click anywhere to highlight, board is read-only">Teach</button>
   <button id="aboutBtn" class="chip" title="About inkboard">About</button>
   <button id="helpBtn" class="btn" title="Keyboard shortcuts ( ? )"></button>
   <button id="folderBtn" class="chip" title="Choose the folder boards are saved to">
@@ -847,6 +858,30 @@ function togglePresent(force) {
   if (on) S.sel = null;
   closeMenu(); render();
 }
+function teachPulse(x, y) {
+  const el = document.createElement('div');
+  el.className = 'teach-ring';
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+  document.body.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+}
+function setReadonly(on) {
+  document.body.classList.toggle('readonly', on);
+  $('#readonlyBtn').classList.toggle('on', on);
+  if (on) { document.body.classList.remove('teach'); $('#teachBtn').classList.remove('on'); }
+  if (editing) editing.commit();
+  S.sel = null; S.selSet = new Set(); render();
+}
+function setTeach(on) {
+  document.body.classList.toggle('teach', on);
+  $('#teachBtn').classList.toggle('on', on);
+  if (on) { document.body.classList.remove('readonly'); $('#readonlyBtn').classList.remove('on'); setTool('select'); }
+  if (editing) editing.commit();
+  S.sel = null; S.selSet = new Set(); render();
+}
+function toggleToolbar() {
+  document.body.classList.toggle('toolbar-hidden');
+}
 let clipboard = null;
 function selArr() { return S.selSet.size > 1 ? [...S.selSet] : (S.sel ? [S.sel] : []); }
 function bboxOverlaps(o, rx, ry, rw, rh) {
@@ -1013,6 +1048,15 @@ cv.addEventListener('pointerdown', e => {
   if (editing) editing.commit();
   closeMenu();
   cv.setPointerCapture(e.pointerId);
+  // teach/readonly: show ripple (teach only) and allow pan only
+  if (document.body.classList.contains('teach') || document.body.classList.contains('readonly')) {
+    if (document.body.classList.contains('teach')) teachPulse(e.clientX, e.clientY);
+    if (e.button === 0 || e.button === 1) {
+      drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: S.view.x, vy: S.view.y };
+      cv.style.cursor = 'grabbing';
+    }
+    return;
+  }
   const p = toWorld(e);
   if (e.button === 0) {
     // text pin and resize handles win over every tool, including Pan
@@ -1302,6 +1346,17 @@ addEventListener('keydown', e => {
   if (inField) { if (e.key === 'Enter' && e.target.id === 'name') e.target.blur(); return; }
   if (!$('#about').hidden) { if (e.key === 'Escape') closeAbout(); return; }
   if (!$('#help').hidden) { if (e.key === 'Escape' || e.key === '?' || (e.code === 'Slash' && e.shiftKey)) closeHelp(); return; }
+  if (e.key === '\\') { e.preventDefault(); toggleToolbar(); return; }
+  const isViewOnly = document.body.classList.contains('readonly') || document.body.classList.contains('teach');
+  if (isViewOnly) {
+    if (e.key === 'Escape') {
+      if (document.body.classList.contains('teach')) { setTeach(false); return; }
+      if (document.body.classList.contains('readonly')) { setReadonly(false); return; }
+    }
+    if (e.key === 'Tab') { e.preventDefault(); togglePresent(); return; }
+    if (e.key === '?' || (e.code === 'Slash' && e.shiftKey)) { openHelp(); return; }
+    return;
+  }
   if (mod) {
     if (k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (k === 'y') { e.preventDefault(); redo(); }
@@ -1315,7 +1370,12 @@ addEventListener('keydown', e => {
   }
   if (e.key === 'Tab') { e.preventDefault(); togglePresent(); return; }
   if (e.key === '?' || (e.code === 'Slash' && e.shiftKey)) { openHelp(); return; }
-  if (e.key === 'Escape') { if (document.body.classList.contains('present')) togglePresent(false); else { S.sel = null; S.selSet = new Set(); closeMenu(); render(); } return; }
+  if (e.key === 'Escape') {
+    if (document.body.classList.contains('toolbar-hidden')) { document.body.classList.remove('toolbar-hidden'); return; }
+    if (document.body.classList.contains('present')) togglePresent(false);
+    else { S.sel = null; S.selSet = new Set(); closeMenu(); render(); }
+    return;
+  }
   if (e.code === 'Space') { e.preventDefault(); if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; } return; }
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSel(); return; }
   if (e.key === '[') { setSize(curIdx() - 1); return; }
@@ -1378,7 +1438,7 @@ function setTheme(dark, save = true) {
 /* ---------- toast ---------- */
 let tt;
 function toast(m) {
-  if (document.body.classList.contains('present')) return;
+  if (document.body.classList.contains('present') || document.body.classList.contains('teach')) return;
   const t = $('#toast'); t.textContent = m; t.classList.add('show');
   clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2400);
 }
@@ -1621,6 +1681,8 @@ $('#themeBtn').addEventListener('click', () => {
   if (S.bg !== want) setBg(want);   // dark mode brings a dark canvas, ink flips to white
 });
 $('#aboutBtn').addEventListener('click', openAbout);
+$('#readonlyBtn').addEventListener('click', () => setReadonly(!document.body.classList.contains('readonly')));
+$('#teachBtn').addEventListener('click', () => setTeach(!document.body.classList.contains('teach')));
 $('#aboutClose').addEventListener('click', closeAbout);
 $('#about').addEventListener('pointerdown', e => { if (e.target.id === 'about') closeAbout(); });
 $('#helpBtn').addEventListener('click', openHelp);
