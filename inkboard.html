@@ -867,15 +867,19 @@ function teachPulse(x, y) {
 }
 function setReadonly(on) {
   document.body.classList.toggle('readonly', on);
-  $('#readonlyBtn').classList.toggle('on', on);
-  if (on) { document.body.classList.remove('teach'); $('#teachBtn').classList.remove('on'); }
+  const btn = $('#readonlyBtn');
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? 'Exit View' : 'View';
+  if (on) { document.body.classList.remove('teach'); const tb = $('#teachBtn'); tb.classList.remove('on'); tb.textContent = 'Teach'; }
   if (editing) editing.commit();
   S.sel = null; S.selSet = new Set(); render();
 }
 function setTeach(on) {
   document.body.classList.toggle('teach', on);
-  $('#teachBtn').classList.toggle('on', on);
-  if (on) { document.body.classList.remove('readonly'); $('#readonlyBtn').classList.remove('on'); setTool('select'); }
+  const btn = $('#teachBtn');
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? 'Exit Teach' : 'Teach';
+  if (on) { document.body.classList.remove('readonly'); const rb = $('#readonlyBtn'); rb.classList.remove('on'); rb.textContent = 'View'; setTool('select'); }
   if (editing) editing.commit();
   S.sel = null; S.selSet = new Set(); render();
 }
