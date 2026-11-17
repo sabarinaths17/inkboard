@@ -129,6 +129,7 @@ Templates panel is in the topright bar ("Templates" chip). Two templates availab
 - Rect shows 4 connection ports (N/E/S/W midpoints) when selected with the select tool; drag from a port to create an arrow
 - Dropping an arrow on empty space auto-spawns a new linked node in the arrow's travel direction; new node's facing port aligns with the arrow tip
 - `makeMindmap(cx?, cy?)` accepts optional world-coordinate center; defaults to `viewCenter()`
+- **Auto-fit on edit**: when the text object in an `mm-` group is edited, `commit()` in `startText` measures the new text width via `mctx`, updates `rect.w` (min 100px, +36px padding), re-centers `rect.x` around the original horizontal center, and re-centers `o.x` to match; supports multi-line (uses max line width)
 
 ### Stamp logic (`stampTemplate(objs)`)
 - Pushes undo snapshot, adds all objects, selects them all via `selSet`, switches to select tool, shows toast.

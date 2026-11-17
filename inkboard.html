@@ -1044,7 +1044,22 @@ function startText(o, p) {
     ta.remove(); editing = null; hiddenObj = null;
     if (o) {
       if (!text) { pushUndo(); S.objects.splice(S.objects.indexOf(o), 1); S.sel = null; }
-      else if (text !== o.text) { pushUndo(); o.text = text; }
+      else if (text !== o.text) {
+        pushUndo(); o.text = text;
+        if (o.group && o.group.startsWith('mm-')) {
+          const rect = S.objects.find(r => r.type === 'rect' && r.group === o.group);
+          if (rect) {
+            mctx.font = `500 ${o.size}px ${FONT}`;
+            const lines = text.split('\n');
+            const maxW = lines.reduce((m, l) => Math.max(m, mctx.measureText(l).width), 0);
+            const pad = 36;
+            const newW = Math.max(100, Math.ceil(maxW) + pad);
+            const cx = rect.x + rect.w / 2;
+            rect.w = newW; rect.x = cx - newW / 2;
+            o.x = cx - maxW / 2;
+          }
+        }
+      }
     } else if (text) {
       pushUndo(); S.objects.push({ type: 'text', x: pos.x, y: pos.y, text, size, color });
     }
