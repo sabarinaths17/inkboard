@@ -557,6 +557,28 @@ function drawMdText(c, o) {
     }
   });
 }
+function drawMmText(c, o, rect) {
+  const pad = 14, lh = o.size * 1.25;
+  const availW = rect.w - 2 * pad;
+  const maxLines = Math.max(1, Math.floor((rect.h - 8) / lh));
+  c.font = `500 ${o.size}px ${FONT}`; c.textBaseline = 'top'; c.fillStyle = o.color;
+  const rawLines = o.text.split('\n');
+  const truncVert = rawLines.length > maxLines;
+  const lines = truncVert ? rawLines.slice(0, maxLines) : rawLines;
+  const fitted = lines.map((l, i) => {
+    const isLast = i === lines.length - 1 && truncVert;
+    const ellipsis = isLast ? ' ~...' : '';
+    let t = l;
+    while (t.length > 0 && c.measureText(t + ellipsis).width > availW) t = t.slice(0, -1);
+    return t + ellipsis;
+  });
+  const totalH = fitted.length * lh;
+  const startY = rect.y + (rect.h - totalH) / 2;
+  fitted.forEach((line, i) => {
+    const lw = c.measureText(line).width;
+    c.fillText(line, rect.x + (rect.w - lw) / 2, startY + i * lh);
+  });
+}
 function drawObj(c, o) {
   c.strokeStyle = o.color; c.fillStyle = o.color;
   c.lineWidth = o.width || 1; c.lineCap = 'round'; c.lineJoin = 'round';
@@ -575,6 +597,10 @@ function drawObj(c, o) {
     case 'arrow': c.stroke(new Path2D(arrowD(o))); break;
     case 'text': {
       c.font = `500 ${o.size}px ${FONT}`; c.textBaseline = 'top';
+      if (o.group && o.group.startsWith('mm-')) {
+        const rect = S.objects.find(r => r.type === 'rect' && r.group === o.group);
+        if (rect) { drawMmText(c, o, rect); break; }
+      }
       drawMdText(c, o);
       break;
     }
@@ -1174,7 +1200,11 @@ function toggleCheckbox(o, li) {
 function startText(o, p) {
   if (editing) editing.commit();
   const size = o ? o.size : TEXTSIZES[S.sz.text];
-  const pos = o ? { x: o.x, y: o.y } : p;
+  let pos = o ? { x: o.x, y: o.y } : p;
+  if (o && o.group && o.group.startsWith('mm-')) {
+    const rect = S.objects.find(r => r.type === 'rect' && r.group === o.group);
+    if (rect) pos = { x: rect.x + 14, y: rect.y + (rect.h - size) / 2 };
+  }
   const color = o ? o.color : resolveColor(S.color);
   const ta = document.createElement('textarea');
   ta.className = 'texted'; ta.wrap = 'off'; ta.rows = 1; ta.spellcheck = false; ta.value = o ? o.text : '';
@@ -1208,7 +1238,7 @@ function startText(o, p) {
             const newW = Math.max(100, Math.ceil(maxW) + pad);
             const cx = rect.x + rect.w / 2;
             rect.w = newW; rect.x = cx - newW / 2;
-            o.x = cx - maxW / 2;
+            o.x = rect.x + 14; o.y = rect.y + (rect.h - o.size) / 2;
           }
         }
       }
@@ -1437,6 +1467,10 @@ cv.addEventListener('pointermove', e => {
         rp = sn ? { x: sn.x, y: sn.y } : p;
       } else { drag.snap = null; }
       applyResize(S.sel, drag.orig, drag.h, rp);
+      if (S.sel && S.sel.type === 'rect' && S.sel.group && S.sel.group.startsWith('mm-')) {
+        const txt = S.objects.find(t => t.type === 'text' && t.group === S.sel.group);
+        if (txt) { txt.x = S.sel.x + 14; txt.y = S.sel.y + (S.sel.h - txt.size) / 2; }
+      }
       changed(); break;
     }
   }
@@ -1535,6 +1569,10 @@ cv.addEventListener('dblclick', e => {
   const p = toWorld(e);
   const o = S.tool === 'select' ? pick(p) : null;
   if (o && o.type === 'text') { S.sel = o; startText(o); return; }
+  if (o && o.type === 'rect' && o.group && o.group.startsWith('mm-')) {
+    const txt = S.objects.find(t => t.type === 'text' && t.group === o.group);
+    if (txt) { S.sel = txt; startText(txt); return; }
+  }
   if (o && o.type === 'rect' && o.group && o.group.startsWith('kb-') && p.y > o.y + 44) {
     startText(null, p);
   }
