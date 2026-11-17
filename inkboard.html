@@ -640,10 +640,12 @@ function paint() {
   if (!editing && !document.body.classList.contains('present')) {
     if (S.selSet.size > 1) paintMultiSel();
     else if (S.sel) { paintSel(); if (S.sel.type === 'rect' && S.tool === 'select') paintPorts(S.sel); }
-    const pins = new Set();
-    if (S.sel && S.sel.type === 'text') pins.add(S.sel);
-    if (hoverText && S.objects.includes(hoverText)) pins.add(hoverText);
-    pins.forEach(paintPin);
+    if (S.tool !== 'laser') {
+      const pins = new Set();
+      if (S.sel && S.sel.type === 'text') pins.add(S.sel);
+      if (hoverText && S.objects.includes(hoverText)) pins.add(hoverText);
+      pins.forEach(paintPin);
+    }
   }
   if (drag && drag.snap && (drag.mode === 'connect' || (drag.mode === 'resize' && (drag.h === 'p1' || drag.h === 'p2')))) {
     const { x, y, k } = S.view, o = drag.snap.obj, b = bbox(o);
@@ -905,7 +907,7 @@ function updateHover(e) {
   if (editing || document.body.classList.contains('present')) return;
   const px = e.clientX, py = e.clientY, { x, y, k } = S.view;
   let found = null;
-  for (let i = S.objects.length - 1; i >= 0; i--) {
+  if (S.tool !== 'laser') for (let i = S.objects.length - 1; i >= 0; i--) {
     const o = S.objects[i];
     if (o.type !== 'text') continue;
     const b = bbox(o), l = b.x * k + x - 4, t = b.y * k + y - 4, r = l + b.w * k + 8, bt = t + b.h * k + 8;
