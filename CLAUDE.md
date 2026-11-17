@@ -175,7 +175,7 @@ Each board can hold multiple pages (slides). `S.pages` is the array; `S.pageIdx`
 - Each page: `{ id: 'pg-<timestamp>', name: string, bg: string, objects: [] }`
 - `syncPageState()` — writes `S.bg` and `S.objects` back into `S.pages[S.pageIdx]`; must be called before switching pages or saving
 - `switchPage(idx)` — syncs current, swaps `S.objects`/`S.bg`, resets selection and undo history, re-renders
-- `addPage()` — appends a new blank page, switches to it
+- `addPage()` — appends a new blank page; does NOT auto-switch (user stays on current page, clicks the new tab to go to it)
 - `deletePage(idx)` — removes a page (blocked if only one remains); switches to nearest neighbour
 - `renderPageBar()` — rebuilds the bottom tab bar DOM from `S.pages`
 - `togglePageBar()` — toggles `body.bar-off` class; bar slides out via `translateY(100%)`; a persistent `#page-restore` button (`Pages ▴`) appears at the bottom-left when the bar is hidden
