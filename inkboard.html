@@ -44,8 +44,13 @@ body.dock-auto #dock{transform:translateX(-50%) translateY(calc(100% + 46px))}
 body.dock-auto.dock-peek #dock,body.dock-auto #dock:hover{transform:translateX(-50%) translateY(0)}
 /* active state for mode toggle chips */
 .chip.on{background:rgba(59,108,246,.12);color:#3b6cf6}
-/* image actions toolbar */
-#imgActions{position:fixed;display:flex;gap:4px;padding:4px 6px;border-radius:8px;transform:translateX(-50%);pointer-events:auto;z-index:20}
+/* right-click context menu */
+#ctx-menu{position:fixed;min-width:172px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px;z-index:200;box-shadow:0 8px 28px rgba(0,0,0,.2);display:flex;flex-direction:column;gap:1px}
+#ctx-menu[hidden]{display:none}
+#ctx-menu .cx-btn{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:0;background:transparent;border-radius:7px;cursor:pointer;font:500 13px var(--font);color:var(--text);text-align:left;white-space:nowrap}
+#ctx-menu .cx-btn:hover{background:var(--hover)}
+#ctx-menu .cx-btn.danger{color:#e44}
+#ctx-menu .cx-sep{border:0;border-top:1px solid var(--line);margin:3px 0}
 /* crop cursor */
 body.cropping #cv{cursor:crosshair!important}
 /* teach mode ripple */
@@ -220,10 +225,8 @@ body:not(.bar-off) #zoom{bottom:52px}
 <div id="about" hidden><div class="aboutcard glass" role="dialog" aria-label="About inkboard"><div class="helphead"><b>About inkboard</b><button id="aboutClose" class="btn" title="Close"></button></div><p class="about-sub">A fast, single-page whiteboard for drawing, diagramming, and building visual notes — no account, no cloud, everything stays in your browser.</p><div class="about-grid"><div class="about-feat"><b>Drawing tools</b><ul><li>Pen (freehand)</li><li>Shapes — rect, ellipse</li><li>Lines &amp; arrows</li><li>Text with markdown</li><li>Eraser</li></ul></div><div class="about-feat"><b>Connections</b><ul><li>Drag from port dots on any box to wire arrows</li><li>Curved arrows (drag the midpoint)</li><li>Arrows stay attached when you move boxes</li><li>Reconnect endpoints by dragging</li></ul></div><div class="about-feat"><b>Multi-page</b><ul><li>Add unlimited slides via the bottom tab bar</li><li>Rename pages with a double-click</li><li>Collapse the bar while drawing</li><li>Save individual pages or the full board</li></ul></div><div class="about-feat"><b>Save &amp; export</b><ul><li>PNG — embeds full board data invisibly; re-import to continue editing</li><li>SVG — vector, for Figma, Canva, browsers</li><li>PNG transparent — for OBS / video overlays</li><li>.inkboard.json — full board or current page; drag back to restore</li></ul></div><div class="about-feat"><b>Templates</b><ul><li>Kanban column — drag to chain more columns</li><li>Mind map node — drag ports to extend branches</li></ul></div><div class="about-feat"><b>Workflow</b><ul><li>Full keyboard shortcuts (<kbd style="font:500 11px var(--font);background:var(--hover);border:1px solid var(--line);border-radius:5px;padding:1px 6px">?</kbd> to see all)</li><li>Undo / redo without limit</li><li>Multi-select, copy, paste, duplicate</li><li>Presenter mode hides all UI (<kbd style="font:500 11px var(--font);background:var(--hover);border:1px solid var(--line);border-radius:5px;padding:1px 6px">Tab</kbd>)</li><li>Pan with two-finger scroll or space+drag; pinch or Ctrl+scroll to zoom</li></ul></div></div><p class="about-footer">Auto-saves to browser storage on every change. For long-term storage export a .inkboard.json file — drag it back to pick up exactly where you left off. Boards can also be generated externally with any AI and imported here.</p></div></div>
 <div id="help" hidden><div class="helpcard glass" role="dialog" aria-label="Keyboard shortcuts"><div class="helphead"><b>Keyboard shortcuts</b><button id="helpClose" class="btn" title="Close ( Esc )"></button></div><div class="helpgrid" id="helpGrid"></div><div class="helpnote" id="helpNote"></div></div></div>
 <div id="toast"></div>
-<div id="imgActions" class="glass" hidden>
-  <button class="chip" id="cropBtn" title="Crop image (K)">✂ Crop</button>
-  <button class="chip" id="uncropBtn" title="Remove crop">↺ Reset</button>
-</div>
+<div id="ctx-menu" hidden></div>
+<input type="file" id="imgInput" accept="image/*" hidden>
 <input type="file" id="file" accept=".png,.json,.jpg,.jpeg,.gif,.webp,.svg" hidden>
 
 <button id="page-restore" class="ui">Pages ▴</button>
@@ -659,7 +662,6 @@ function paint() {
   }
   syncSizeUI();
   $('#zoom').textContent = Math.round(k * 100) + '%';
-  updateImgActions();
 }
 function paintSel() {
   const o = S.sel, { x, y, k } = S.view, acc = '#3b6cf6';
@@ -785,20 +787,28 @@ function addImageFromSrc(src, pt) {
   if (img.complete && img.naturalWidth) insert();
   else img.addEventListener('load', insert, { once: true });
 }
-function updateImgActions() {
-  const btn = $('#imgActions');
-  if (!btn) return;
-  if (!S.sel || S.sel.type !== 'image' || cropEdit || document.body.classList.contains('present')) {
-    btn.hidden = true; return;
-  }
-  const o = S.sel, { x, y, k } = S.view;
-  const b = bbox(o);
-  btn.hidden = false;
-  btn.style.left = (b.x * k + x + b.w * k / 2) + 'px';
-  btn.style.top = Math.max(8, b.y * k + y - 44) + 'px';
-  const ub = $('#uncropBtn');
-  if (ub) ub.style.display = o.crop ? '' : 'none';
+function showCtxMenu(cx, cy, items) {
+  const m = $('#ctx-menu');
+  m.innerHTML = '';
+  items.forEach(it => {
+    if (it === '-') { const h = document.createElement('hr'); h.className = 'cx-sep'; m.appendChild(h); return; }
+    const b = document.createElement('button');
+    b.className = 'cx-btn' + (it.danger ? ' danger' : '');
+    b.textContent = it.label;
+    b.addEventListener('click', () => { hideCtxMenu(); it.fn(); });
+    m.appendChild(b);
+  });
+  m.hidden = false;
+  m.style.left = cx + 'px'; m.style.top = cy + 'px';
+  requestAnimationFrame(() => {
+    const r = m.getBoundingClientRect();
+    if (r.right > innerWidth - 8) m.style.left = Math.max(8, cx - r.width) + 'px';
+    if (r.bottom > innerHeight - 8) m.style.top = Math.max(8, cy - r.height) + 'px';
+  });
 }
+function hideCtxMenu() { const m = $('#ctx-menu'); if (m) m.hidden = true; }
+function bringToFront(o) { pushUndo(); const i = S.objects.indexOf(o); if (i < S.objects.length - 1) { S.objects.splice(i, 1); S.objects.push(o); changed(); } }
+function sendToBack(o) { pushUndo(); const i = S.objects.indexOf(o); if (i > 0) { S.objects.splice(i, 1); S.objects.unshift(o); changed(); } }
 
 /* connection ports — midpoints of rect edges, used to drag out arrows */
 function portsFor(o) {
@@ -1572,6 +1582,49 @@ cv.addEventListener('dblclick', e => {
     startText(null, p);
   }
 });
+cv.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if (cropEdit) return;
+  if (editing) editing.commit();
+  const p = toWorld(e);
+  const o = pick(p);
+  const multi = S.selSet.size > 1 && o && S.selSet.has(o);
+  if (o && !multi) { S.sel = o; S.selSet = new Set(); render(); }
+  if (multi) {
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: 'Copy', fn: copySelected },
+      { label: 'Duplicate', fn: duplicate },
+      '-',
+      { label: 'Delete', danger: true, fn: deleteSel },
+    ]);
+  } else if (o) {
+    const items = [];
+    if (o.type === 'image') {
+      items.push({ label: '✂  Crop  (K)', fn: startCrop });
+      if (o.crop) items.push({ label: '↺  Reset Crop', fn: () => { pushUndo(); delete o.crop; changed(); } });
+      items.push('-');
+    }
+    items.push(
+      { label: 'Copy', fn: copySelected },
+      { label: 'Duplicate', fn: duplicate },
+      '-',
+      { label: 'Bring to Front', fn: () => bringToFront(o) },
+      { label: 'Send to Back', fn: () => sendToBack(o) },
+      '-',
+      { label: 'Delete', danger: true, fn: deleteSel }
+    );
+    showCtxMenu(e.clientX, e.clientY, items);
+  } else {
+    const items = [{ label: '🖼  Insert Image…', fn: () => $('#imgInput').click() }];
+    if (clipboard && clipboard.length) items.push({ label: 'Paste', fn: pasteClipboard });
+    items.push('-');
+    if (S.objects.length) {
+      items.push({ label: 'Select All', fn: () => { S.selSet = new Set(S.objects); S.sel = null; render(); } });
+      items.push({ label: 'Clear Board', danger: true, fn: clearBoard });
+    }
+    showCtxMenu(e.clientX, e.clientY, items);
+  }
+});
 cv.addEventListener('wheel', e => {
   e.preventDefault();
   if (editing) editing.commit();
@@ -1619,6 +1672,7 @@ addEventListener('keydown', e => {
   if (e.key === 'Tab') { e.preventDefault(); togglePresent(); return; }
   if (e.key === '?' || (e.code === 'Slash' && e.shiftKey)) { openHelp(); return; }
   if (e.key === 'Escape') {
+    if (!$('#ctx-menu').hidden) { hideCtxMenu(); return; }
     if (document.body.classList.contains('toolbar-hidden')) { document.body.classList.remove('toolbar-hidden'); return; }
     if (document.body.classList.contains('present')) togglePresent(false);
     else { S.sel = null; S.selSet = new Set(); closeMenu(); render(); }
@@ -1937,12 +1991,11 @@ const menu = $('#menu');
 function closeMenu() { menu.hidden = true; $('#tmpMenu').hidden = true; }
 $('#saveBtn').addEventListener('click', e => { e.stopPropagation(); const h = menu.hidden; closeMenu(); menu.hidden = !h; });
 menu.addEventListener('click', e => { const b = e.target.closest('[data-save]'); if (b) save(b.dataset.save); });
-document.addEventListener('click', e => { if (!e.target.closest('.savewrap')) closeMenu(); });
+document.addEventListener('click', e => { if (!e.target.closest('.savewrap')) closeMenu(); if (!e.target.closest('#ctx-menu')) hideCtxMenu(); });
 $('#tmpBtn').addEventListener('click', e => { e.stopPropagation(); const tm = $('#tmpMenu'), h = tm.hidden; closeMenu(); tm.hidden = !h; });
 $('#tmplKanban').addEventListener('click', () => { closeMenu(); stampTemplate(makeKanban()); });
 $('#tmplMindmap').addEventListener('click', () => { closeMenu(); stampTemplate(makeMindmap()); });
-$('#cropBtn').addEventListener('click', () => startCrop());
-$('#uncropBtn').addEventListener('click', () => { if (S.sel && S.sel.type === 'image') { pushUndo(); delete S.sel.crop; changed(); } });
+$('#imgInput').addEventListener('change', e => { const f = e.target.files[0]; if (f) readAsDataURL(f).then(src => addImageFromSrc(src)); e.target.value = ''; });
 $('#openBtn').addEventListener('click', openFile);
 $('#newBtn').addEventListener('click', newBoard);
 $('#themeBtn').addEventListener('click', () => {
