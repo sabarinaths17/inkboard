@@ -205,7 +205,15 @@ body:not(.bar-off) #zoom{bottom:52px}
     </div>
   </div>
   <button id="openBtn" class="txt" title="Open a board (Ctrl+O)">Open</button>
-  <button id="newBtn" class="txt" title="New board">New</button>
+  <div class="savewrap">
+    <button id="newBtn" class="txt" title="New page / open content">New <svg viewBox="0 0 12 12" width="10" height="10" style="vertical-align:-.1em"><path d="M2.5 4.5L6 8l3.5-3.5"/></svg></button>
+    <div id="newMenu" class="glass menu" style="width:260px" hidden>
+      <button id="newBlankBtn"><b>New blank page</b><span>Adds a fresh tab, keeps current</span></button>
+      <button id="newImgBtn"><b>Insert image…</b><span>Adds image to the current page</span></button>
+      <button id="newBoardBtn"><b>Open board…</b><span>Opens .inkboard.json or PNG in a new tab</span></button>
+    </div>
+  </div>
+  <input type="file" id="boardInput" accept=".png,.json,.inkboard.json" hidden>
   <div class="savewrap">
     <button id="saveBtn" class="primary">Save <svg viewBox="0 0 12 12"><path d="M2.5 4.5L6 8l3.5-3.5"/></svg></button>
     <div id="menu" class="glass menu" hidden>
@@ -1663,7 +1671,6 @@ addEventListener('keydown', e => {
     else if (k === 'y') { e.preventDefault(); redo(); }
     else if (k === 'a') { e.preventDefault(); if (S.objects.length) { S.selSet = new Set(S.objects); S.sel = null; render(); } }
     else if (k === 'c') { e.preventDefault(); copySelected(); }
-    else if (k === 'v') { e.preventDefault(); pasteClipboard(); }
     else if (k === 'd') { e.preventDefault(); duplicate(); }
     else if (k === '0') { e.preventDefault(); S.view = { x: 0, y: 0, k: 1 }; render(); }
     else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); clearBoard(); }
@@ -1946,9 +1953,10 @@ document.addEventListener('paste', async e => {
     if (item.type.startsWith('image/')) {
       e.preventDefault();
       const src = await readAsDataURL(item.getAsFile());
-      addImageFromSrc(src); break;
+      addImageFromSrc(src); return;
     }
   }
+  if (clipboard && clipboard.length) { e.preventDefault(); pasteClipboard(); }
 });
 
 /* ---------- templates ---------- */
@@ -1988,7 +1996,7 @@ function stampTemplate(objs) {
 
 /* ---------- top bar wiring ---------- */
 const menu = $('#menu');
-function closeMenu() { menu.hidden = true; $('#tmpMenu').hidden = true; }
+function closeMenu() { menu.hidden = true; $('#tmpMenu').hidden = true; $('#newMenu').hidden = true; }
 $('#saveBtn').addEventListener('click', e => { e.stopPropagation(); const h = menu.hidden; closeMenu(); menu.hidden = !h; });
 menu.addEventListener('click', e => { const b = e.target.closest('[data-save]'); if (b) save(b.dataset.save); });
 document.addEventListener('click', e => { if (!e.target.closest('.savewrap')) closeMenu(); if (!e.target.closest('#ctx-menu')) hideCtxMenu(); });
@@ -1996,8 +2004,64 @@ $('#tmpBtn').addEventListener('click', e => { e.stopPropagation(); const tm = $(
 $('#tmplKanban').addEventListener('click', () => { closeMenu(); stampTemplate(makeKanban()); });
 $('#tmplMindmap').addEventListener('click', () => { closeMenu(); stampTemplate(makeMindmap()); });
 $('#imgInput').addEventListener('change', e => { const f = e.target.files[0]; if (f) readAsDataURL(f).then(src => addImageFromSrc(src)); e.target.value = ''; });
+async function openBoardInNewTab() {
+  closeMenu();
+  let file;
+  if (window.showOpenFilePicker) {
+    try {
+      const opts = { types: [{ description: 'Inkboard', accept: { 'image/png': ['.png'], 'application/json': ['.json'] } }] };
+      if (dirHandle) opts.startIn = dirHandle;
+      const [h] = await window.showOpenFilePicker(opts);
+      file = await h.getFile();
+    } catch(e) { return; }
+  } else { $('#boardInput').click(); return; }
+  if (!file) return;
+  try {
+    let data;
+    if (/\.png$/i.test(file.name) || file.type === 'image/png') {
+      data = await readFromPng(file);
+      if (!data) { toast('That PNG has no Inkboard data in it'); return; }
+    } else data = JSON.parse(await file.text());
+    if (!data || data.app !== 'inkboard') { toast('Not an Inkboard file'); return; }
+    syncPageState();
+    const insertIdx = S.pages.length;
+    const newPages = data.pages || [{ id: 'pg-' + Date.now(), name: 'Page 1', bg: data.bg || '#ffffff', objects: data.objects || [] }];
+    newPages.forEach(pg => { S.pages.push(pg); (pg.objects || []).forEach(o => { if (o.type === 'image') loadImg(o.src); }); });
+    S.pageIdx = insertIdx + (data.pageIdx || 0);
+    S.bg = S.pages[S.pageIdx].bg || '#ffffff';
+    S.objects = S.pages[S.pageIdx].objects || [];
+    S.sel = null; S.selSet = new Set(); hist.u = []; hist.r = [];
+    renderPageBar(); syncUI(); changed(); fitView();
+    toast('Opened ' + file.name + ' in a new tab');
+  } catch(err) { toast('Could not open that file'); }
+}
+$('#boardInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    let data;
+    if (/\.png$/i.test(f.name) || f.type === 'image/png') {
+      data = await readFromPng(f);
+      if (!data) { toast('That PNG has no Inkboard data in it'); return; }
+    } else data = JSON.parse(await f.text());
+    if (!data || data.app !== 'inkboard') { toast('Not an Inkboard file'); return; }
+    syncPageState();
+    const insertIdx = S.pages.length;
+    const newPages = data.pages || [{ id: 'pg-' + Date.now(), name: 'Page 1', bg: data.bg || '#ffffff', objects: data.objects || [] }];
+    newPages.forEach(pg => { S.pages.push(pg); (pg.objects || []).forEach(o => { if (o.type === 'image') loadImg(o.src); }); });
+    S.pageIdx = insertIdx + (data.pageIdx || 0);
+    S.bg = S.pages[S.pageIdx].bg || '#ffffff';
+    S.objects = S.pages[S.pageIdx].objects || [];
+    S.sel = null; S.selSet = new Set(); hist.u = []; hist.r = [];
+    renderPageBar(); syncUI(); changed(); fitView();
+    toast('Opened ' + f.name + ' in a new tab');
+  } catch(err) { toast('Could not open that file'); }
+});
 $('#openBtn').addEventListener('click', openFile);
-$('#newBtn').addEventListener('click', newBoard);
+$('#newBtn').addEventListener('click', e => { e.stopPropagation(); const h = $('#newMenu').hidden; closeMenu(); $('#newMenu').hidden = !h; });
+$('#newBlankBtn').addEventListener('click', () => { closeMenu(); addPage(); });
+$('#newImgBtn').addEventListener('click', () => { closeMenu(); $('#imgInput').click(); });
+$('#newBoardBtn').addEventListener('click', () => { closeMenu(); openBoardInNewTab(); });
 $('#themeBtn').addEventListener('click', () => {
   const dark = !document.body.classList.contains('dark');
   setTheme(dark);
