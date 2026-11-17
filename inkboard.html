@@ -1137,12 +1137,7 @@ function addPage() {
   syncPageState();
   const idx = S.pages.length;
   S.pages.push({ id: 'pg-' + Date.now(), name: 'Page ' + (idx + 1), bg: S.bg, objects: [] });
-  S.pageIdx = idx;
-  S.bg = S.pages[idx].bg;
-  S.objects = S.pages[idx].objects;
-  S.sel = null; S.selSet = new Set();
-  hist.u = []; hist.r = [];
-  renderPageBar(); syncUI(); changed();
+  renderPageBar(); changed();
 }
 function deletePage(idx) {
   if (S.pages.length <= 1) { toast('Cannot delete the last page'); return; }
