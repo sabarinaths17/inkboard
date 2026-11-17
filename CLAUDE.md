@@ -16,7 +16,7 @@ Single-file whiteboard canvas app: `inkboard.html`. All logic, styles, and marku
 
 ## Object model
 
-Each object in `S.objects` has a `type` field: `pen | rect | ellipse | line | arrow | text`. Objects are plain JS objects — no classes. `clone()` deep-copies them (note: `srcConn`/`dstConn` object refs are lost on JSON round-trip), `moveObj()` translates them, `bbox()` returns their bounding box.
+Each object in `S.objects` has a `type` field: `pen | rect | ellipse | line | arrow | text | image`. Objects are plain JS objects — no classes. `clone()` deep-copies them (note: `srcConn`/`dstConn` object refs are lost on JSON round-trip), `moveObj()` translates them, `bbox()` returns their bounding box.
 
 ## Selection model
 
@@ -106,6 +106,36 @@ Text objects render Obsidian-style inline markdown via `drawMdText(c, o)`:
 - `toggleCheckbox(o, li)` — flips `[ ]` ↔ `[x]` on line `li`; calls `pushUndo()` + `changed()`
 - Single click on a checkbox symbol in select mode toggles it without entering edit mode
 - `measure(o)` accounts for checkbox/bullet width offsets in bbox calculation
+
+## Images
+
+`{ type: 'image', x, y, w, h, src, crop? }` — raster image object.
+- `src` — data-URL (base64 PNG/JPEG/etc)
+- `crop` — optional `{ x, y, w, h }` in source pixel coords (omitted = full image)
+- `imgCache` — global `Map<src, HTMLImageElement>`; `loadImg(src)` returns a cached `Image` and triggers re-render on load
+- **Paste from clipboard**: `document.paste` event reads `ClipboardItem` images → `addImageFromSrc(src)`
+- **Drag-and-drop**: the global `drop` handler detects `file.type.startsWith('image/')` → `addImageFromSrc(src, pt)` where `pt` is the drop world position
+- `addImageFromSrc(src, pt?)` — inserts the image centered at `pt` (or view center), capped at 600px wide in world space; waits for load
+- `readAsDataURL(file)` — promise wrapper for `FileReader`
+- Images loaded from saved boards (localStorage + file load) are pre-cached via `S.pages.forEach(pg => pg.objects.forEach(o => loadImg(o.src)))`
+- `drawObj` case `image` — uses `drawImage(img, sx,sy,sw,sh, dx,dy,dw,dh)` for crop; plain `drawImage` otherwise
+- Resize handles: 4 corners (nw/ne/sw/se), same as rect; resizing clears `o.crop`
+- Hit detection: `hitInside` and `hitEdge` both cover `image` type
+
+## Crop mode
+
+`cropEdit = null | { obj, x, y, w, h }` — source pixel crop rect being edited.
+- Enter: `startCrop()` — only if `S.sel.type === 'image'`; initialises from `o.crop` or full image size; sets `body.cropping`
+- Exit apply: `commitCrop()` — saves `o.crop`, clears state, calls `changed()`
+- Exit cancel: `cancelCrop()` — no changes, re-renders
+- `cropHandles()` — 4 corner handles in world coords (nw/ne/sw/se)
+- `cropHandleAt(p)` — returns handle id if world point is within tolerance
+- `paintCropOverlay()` — draws full image → dark mask → bright crop region → dashed border + handles + hint text
+- Pointerdown in crop mode: if on a handle → `drag.mode = 'crop'`; click outside → `commitCrop()`
+- Pointermove case `'crop'`: converts world coords to source pixels, updates `cropEdit.{x,y,w,h}` while clamping to image bounds
+- Keyboard: `Enter` = commit, `Esc` = cancel; all other keys blocked while `cropEdit != null`
+- `K` shortcut starts crop when image selected
+- `#imgActions` floating bar: **✂ Crop** (always shown for images) + **↺ Reset** (shown when crop exists); positioned via `updateImgActions()` called in `paint()`
 
 ## Clipboard
 

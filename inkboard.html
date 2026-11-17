@@ -44,6 +44,10 @@ body.dock-auto #dock{transform:translateX(-50%) translateY(calc(100% + 46px))}
 body.dock-auto.dock-peek #dock,body.dock-auto #dock:hover{transform:translateX(-50%) translateY(0)}
 /* active state for mode toggle chips */
 .chip.on{background:rgba(59,108,246,.12);color:#3b6cf6}
+/* image actions toolbar */
+#imgActions{position:fixed;display:flex;gap:4px;padding:4px 6px;border-radius:8px;transform:translateX(-50%);pointer-events:auto;z-index:20}
+/* crop cursor */
+body.cropping #cv{cursor:crosshair!important}
 /* teach mode ripple */
 .teach-ring{position:fixed;pointer-events:none;border-radius:50%;border:2.5px solid #3b6cf6;width:36px;height:36px;transform:translate(-50%,-50%) scale(0.3);opacity:1;z-index:9999;animation:teach-pop .65s ease-out forwards}
 @keyframes teach-pop{0%{transform:translate(-50%,-50%) scale(0.3);opacity:1}60%{opacity:.7}100%{transform:translate(-50%,-50%) scale(2.6);opacity:0}}
@@ -216,7 +220,11 @@ body:not(.bar-off) #zoom{bottom:52px}
 <div id="about" hidden><div class="aboutcard glass" role="dialog" aria-label="About inkboard"><div class="helphead"><b>About inkboard</b><button id="aboutClose" class="btn" title="Close"></button></div><p class="about-sub">A fast, single-page whiteboard for drawing, diagramming, and building visual notes — no account, no cloud, everything stays in your browser.</p><div class="about-grid"><div class="about-feat"><b>Drawing tools</b><ul><li>Pen (freehand)</li><li>Shapes — rect, ellipse</li><li>Lines &amp; arrows</li><li>Text with markdown</li><li>Eraser</li></ul></div><div class="about-feat"><b>Connections</b><ul><li>Drag from port dots on any box to wire arrows</li><li>Curved arrows (drag the midpoint)</li><li>Arrows stay attached when you move boxes</li><li>Reconnect endpoints by dragging</li></ul></div><div class="about-feat"><b>Multi-page</b><ul><li>Add unlimited slides via the bottom tab bar</li><li>Rename pages with a double-click</li><li>Collapse the bar while drawing</li><li>Save individual pages or the full board</li></ul></div><div class="about-feat"><b>Save &amp; export</b><ul><li>PNG — embeds full board data invisibly; re-import to continue editing</li><li>SVG — vector, for Figma, Canva, browsers</li><li>PNG transparent — for OBS / video overlays</li><li>.inkboard.json — full board or current page; drag back to restore</li></ul></div><div class="about-feat"><b>Templates</b><ul><li>Kanban column — drag to chain more columns</li><li>Mind map node — drag ports to extend branches</li></ul></div><div class="about-feat"><b>Workflow</b><ul><li>Full keyboard shortcuts (<kbd style="font:500 11px var(--font);background:var(--hover);border:1px solid var(--line);border-radius:5px;padding:1px 6px">?</kbd> to see all)</li><li>Undo / redo without limit</li><li>Multi-select, copy, paste, duplicate</li><li>Presenter mode hides all UI (<kbd style="font:500 11px var(--font);background:var(--hover);border:1px solid var(--line);border-radius:5px;padding:1px 6px">Tab</kbd>)</li><li>Pan with two-finger scroll or space+drag; pinch or Ctrl+scroll to zoom</li></ul></div></div><p class="about-footer">Auto-saves to browser storage on every change. For long-term storage export a .inkboard.json file — drag it back to pick up exactly where you left off. Boards can also be generated externally with any AI and imported here.</p></div></div>
 <div id="help" hidden><div class="helpcard glass" role="dialog" aria-label="Keyboard shortcuts"><div class="helphead"><b>Keyboard shortcuts</b><button id="helpClose" class="btn" title="Close ( Esc )"></button></div><div class="helpgrid" id="helpGrid"></div><div class="helpnote" id="helpNote"></div></div></div>
 <div id="toast"></div>
-<input type="file" id="file" accept=".png,.json" hidden>
+<div id="imgActions" class="glass" hidden>
+  <button class="chip" id="cropBtn" title="Crop image (K)">✂ Crop</button>
+  <button class="chip" id="uncropBtn" title="Remove crop">↺ Reset</button>
+</div>
+<input type="file" id="file" accept=".png,.json,.jpg,.jpeg,.gif,.webp,.svg" hidden>
 
 <button id="page-restore" class="ui">Pages ▴</button>
 <div id="page-bar" class="ui">
@@ -288,7 +296,7 @@ const S = {
   pages: null, pageIdx: 0,
 };
 const hist = { u: [], r: [] };
-let draft = null, drag = null, spaceDown = false, editing = null, hiddenObj = null, pending = null;
+let draft = null, drag = null, spaceDown = false, editing = null, hiddenObj = null, pending = null, cropEdit = null;
 let dirHandle = null, hoverText = null;
 const ptr = { x: 0, y: 0, on: false };
 
@@ -299,6 +307,15 @@ function defaultName() {
 const r2 = n => Math.round(n * 100) / 100;
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const clone = o => JSON.parse(JSON.stringify(o));
+const imgCache = new Map();
+function loadImg(src) {
+  if (imgCache.has(src)) return imgCache.get(src);
+  const img = new Image();
+  img.onload = () => render();
+  img.src = src;
+  imgCache.set(src, img);
+  return img;
+}
 function lum(hex) {
   const n = parseInt(hex.slice(1), 16);
   return (0.2126 * (n >> 16 & 255) + 0.7152 * (n >> 8 & 255) + 0.0722 * (n & 255)) / 255;
@@ -355,6 +372,7 @@ function bbox(o) {
       return { x: x1 - m, y: y1 - m, w: x2 - x1 + 2 * m, h: y2 - y1 + 2 * m };
     }
     case 'text': { const m = measure(o); return { x: o.x, y: o.y, w: m.w, h: m.h }; }
+    case 'image': return { x: o.x, y: o.y, w: o.w, h: o.h };
   }
 }
 function distSeg(px, py, x1, y1, x2, y2) {
@@ -395,13 +413,13 @@ function hitEdge(o, p, tol) {
       const d = Math.hypot((p.x - b.x - rx) / rx, (p.y - b.y - ry) / ry);
       return Math.abs(d - 1) * Math.min(rx, ry) <= t;
     }
-    case 'text': { const b = bbox(o); return p.x >= b.x - tol && p.x <= b.x + b.w + tol && p.y >= b.y - tol && p.y <= b.y + b.h + tol; }
+    case 'text': case 'image': { const b = bbox(o); return p.x >= b.x - tol && p.x <= b.x + b.w + tol && p.y >= b.y - tol && p.y <= b.y + b.h + tol; }
   }
   return false;
 }
 function hitInside(o, p) {
   const b = norm(o);
-  if (o.type === 'rect') return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+  if (o.type === 'rect' || o.type === 'image') return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
   const rx = b.w / 2, ry = b.h / 2;
   return rx && ry && Math.hypot((p.x - b.x - rx) / rx, (p.y - b.y - ry) / ry) < 1;
 }
@@ -419,7 +437,7 @@ function pick(p) {
   for (let i = S.objects.length - 1; i >= 0; i--) if (hitEdge(S.objects[i], p, tol)) return S.objects[i];
   for (let i = S.objects.length - 1; i >= 0; i--) {
     const o = S.objects[i];
-    if ((o.type === 'rect' || o.type === 'ellipse') && hitInside(o, p)) return o;
+    if ((o.type === 'rect' || o.type === 'ellipse' || o.type === 'image') && hitInside(o, p)) return o;
   }
   return null;
 }
@@ -430,8 +448,8 @@ function handlesFor(o) {
     return [{ id: 'p1', x: o.x1, y: o.y1 }, { id: 'mid', x: mx, y: my }, { id: 'p2', x: o.x2, y: o.y2 }];
   }
   if (o.type === 'line') return [{ id: 'p1', x: o.x1, y: o.y1 }, { id: 'p2', x: o.x2, y: o.y2 }];
-  if (o.type === 'rect' || o.type === 'ellipse') {
-    const b = norm(o);
+  if (o.type === 'rect' || o.type === 'ellipse' || o.type === 'image') {
+    const b = o.type === 'image' ? bbox(o) : norm(o);
     return [{ id: 'nw', x: b.x, y: b.y }, { id: 'ne', x: b.x + b.w, y: b.y }, { id: 'sw', x: b.x, y: b.y + b.h }, { id: 'se', x: b.x + b.w, y: b.y + b.h }];
   }
   if (o.type === 'text') { const b = bbox(o); return [{ id: 'se', x: b.x + b.w, y: b.y + b.h }]; }
@@ -461,11 +479,12 @@ function applyResize(o, orig, h, p) {
     }
     return;
   }
-  const b = norm(orig);
+  const b = o.type === 'image' ? bbox(orig) : norm(orig);
   const fx = h.includes('w') ? b.x + b.w : b.x;
   const fy = h.includes('n') ? b.y + b.h : b.y;
   o.x = Math.min(fx, p.x); o.y = Math.min(fy, p.y);
   o.w = Math.abs(p.x - fx); o.h = Math.abs(p.y - fy);
+  if (o.type === 'image') delete o.crop;
 }
 function moveObj(o, orig, dx, dy) {
   switch (o.type) {
@@ -559,6 +578,17 @@ function drawObj(c, o) {
       drawMdText(c, o);
       break;
     }
+    case 'image': {
+      const img = loadImg(o.src);
+      if (!img.complete || !img.naturalWidth) break;
+      if (o.crop) {
+        const { x: cx, y: cy, w: cw, h: ch } = o.crop;
+        c.drawImage(img, cx, cy, cw, ch, o.x, o.y, o.w, o.h);
+      } else {
+        c.drawImage(img, o.x, o.y, o.w, o.h);
+      }
+      break;
+    }
   }
 }
 function paint() {
@@ -568,6 +598,7 @@ function paint() {
   ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * x, dpr * y);
   for (const o of S.objects) if (o !== hiddenObj) drawObj(ctx, o);
   if (draft) drawObj(ctx, draft);
+  if (cropEdit) paintCropOverlay();
   if (!editing && !document.body.classList.contains('present')) {
     if (S.selSet.size > 1) paintMultiSel();
     else if (S.sel) { paintSel(); if (S.sel.type === 'rect' && S.tool === 'select') paintPorts(S.sel); }
@@ -602,6 +633,7 @@ function paint() {
   }
   syncSizeUI();
   $('#zoom').textContent = Math.round(k * 100) + '%';
+  updateImgActions();
 }
 function paintSel() {
   const o = S.sel, { x, y, k } = S.view, acc = '#3b6cf6';
@@ -622,6 +654,125 @@ function paintSel() {
   }
 }
 
+
+/* ---------- image + crop ---------- */
+function cropHandles() {
+  if (!cropEdit) return [];
+  const o = cropEdit.obj, img = imgCache.get(o.src);
+  if (!img || !img.naturalWidth) return [];
+  const sx = o.w / img.naturalWidth, sy = o.h / img.naturalHeight;
+  const wx = o.x + cropEdit.x * sx, wy = o.y + cropEdit.y * sy;
+  const ww = cropEdit.w * sx, wh = cropEdit.h * sy;
+  return [
+    { id: 'nw', x: wx,      y: wy      },
+    { id: 'ne', x: wx + ww, y: wy      },
+    { id: 'sw', x: wx,      y: wy + wh },
+    { id: 'se', x: wx + ww, y: wy + wh },
+  ];
+}
+function cropHandleAt(p) {
+  if (!cropEdit) return null;
+  const tol = 12 / S.view.k;
+  for (const h of cropHandles()) if (Math.hypot(p.x - h.x, p.y - h.y) <= tol) return h.id;
+  return null;
+}
+function paintCropOverlay() {
+  const o = cropEdit.obj, { x: vx, y: vy, k } = S.view;
+  const img = imgCache.get(o.src);
+  if (!img || !img.naturalWidth) return;
+  const sx = o.w / img.naturalWidth, sy = o.h / img.naturalHeight;
+  const wx = o.x + cropEdit.x * sx, wy = o.y + cropEdit.y * sy;
+  const ww = cropEdit.w * sx, wh = cropEdit.h * sy;
+  ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * vx, dpr * vy);
+  ctx.drawImage(img, o.x, o.y, o.w, o.h);
+  ctx.fillStyle = 'rgba(0,0,0,0.52)';
+  ctx.fillRect(o.x, o.y, o.w, o.h);
+  ctx.drawImage(img, cropEdit.x, cropEdit.y, cropEdit.w, cropEdit.h, wx, wy, ww, wh);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const scx = wx * k + vx, scy = wy * k + vy, scw = ww * k, sch = wh * k;
+  ctx.save();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+  ctx.strokeRect(scx, scy, scw, sch);
+  ctx.setLineDash([]); ctx.restore();
+  const acc = '#3b6cf6';
+  for (const h of cropHandles()) {
+    ctx.beginPath(); ctx.arc(h.x * k + vx, h.y * k + vy, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = acc; ctx.stroke();
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.save();
+  ctx.font = `500 13px ${FONT}`; ctx.textBaseline = 'bottom';
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillText('Enter to apply · Esc to cancel', scx + 6, scy - 4);
+  ctx.restore();
+}
+function startCrop() {
+  if (!S.sel || S.sel.type !== 'image') return;
+  const o = S.sel;
+  const img = loadImg(o.src);
+  const begin = () => {
+    const nw = img.naturalWidth, nh = img.naturalHeight;
+    cropEdit = o.crop ? { obj: o, ...o.crop } : { obj: o, x: 0, y: 0, w: nw, h: nh };
+    document.body.classList.add('cropping');
+    render();
+    toast('Drag handles · Enter to apply · Esc to cancel');
+  };
+  if (img.complete && img.naturalWidth) begin();
+  else img.addEventListener('load', begin, { once: true });
+}
+function commitCrop() {
+  if (!cropEdit) return;
+  const o = cropEdit.obj, img = imgCache.get(o.src);
+  document.body.classList.remove('cropping');
+  if (img) {
+    const nw = img.naturalWidth, nh = img.naturalHeight;
+    const x = Math.max(0, Math.round(cropEdit.x)), y = Math.max(0, Math.round(cropEdit.y));
+    const w = Math.min(Math.round(cropEdit.w), nw - x), h = Math.min(Math.round(cropEdit.h), nh - y);
+    pushUndo();
+    if (x === 0 && y === 0 && w >= nw && h >= nh) delete o.crop;
+    else o.crop = { x, y, w, h };
+  }
+  cropEdit = null; changed();
+}
+function cancelCrop() {
+  cropEdit = null;
+  document.body.classList.remove('cropping');
+  render();
+}
+function readAsDataURL(file) {
+  return new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(file); });
+}
+function addImageFromSrc(src, pt) {
+  const img = loadImg(src);
+  const insert = () => {
+    const maxW = Math.min(img.naturalWidth, 600 / S.view.k);
+    const scale = maxW / img.naturalWidth;
+    const w = Math.round(img.naturalWidth * scale);
+    const h = Math.round(img.naturalHeight * scale);
+    const center = pt || viewCenter();
+    pushUndo();
+    const o = { type: 'image', x: center.x - w / 2, y: center.y - h / 2, w, h, src };
+    S.objects.push(o);
+    S.sel = o; S.selSet = new Set(); S.tool = 'select'; syncUI(); changed();
+  };
+  if (img.complete && img.naturalWidth) insert();
+  else img.addEventListener('load', insert, { once: true });
+}
+function updateImgActions() {
+  const btn = $('#imgActions');
+  if (!btn) return;
+  if (!S.sel || S.sel.type !== 'image' || cropEdit || document.body.classList.contains('present')) {
+    btn.hidden = true; return;
+  }
+  const o = S.sel, { x, y, k } = S.view;
+  const b = bbox(o);
+  btn.hidden = false;
+  btn.style.left = (b.x * k + x + b.w * k / 2) + 'px';
+  btn.style.top = Math.max(8, b.y * k + y - 44) + 'px';
+  const ub = $('#uncropBtn');
+  if (ub) ub.style.display = o.crop ? '' : 'none';
+}
 
 /* connection ports — midpoints of rect edges, used to drag out arrows */
 function portsFor(o) {
@@ -784,6 +935,7 @@ function fitView() {
 const CURSORS = { select: 'default', pen: 'crosshair', eraser: 'none', rect: 'crosshair', ellipse: 'crosshair', line: 'crosshair', arrow: 'crosshair', text: 'text', hand: 'grab', laser: 'crosshair' };
 function setTool(t) {
   if (editing) editing.commit();
+  if (cropEdit) cancelCrop();
   S.tool = t;
   if (t !== 'select') { S.sel = null; S.selSet = new Set(); }
   cv.style.cursor = CURSORS[t];
@@ -1080,6 +1232,13 @@ cv.addEventListener('pointerdown', e => {
   if (editing) editing.commit();
   closeMenu();
   cv.setPointerCapture(e.pointerId);
+  // crop mode: handle crop handles or commit on outside click
+  if (cropEdit && e.button === 0) {
+    const p = toWorld(e);
+    const ch = cropHandleAt(p);
+    if (ch) { drag = { mode: 'crop', h: ch, origCrop: { ...cropEdit } }; return; }
+    commitCrop(); return;
+  }
   // readonly: allow laser ripple + pan, block all editing
   if (document.body.classList.contains('readonly')) {
     if (S.tool === 'laser') teachPulse(e.clientX, e.clientY);
@@ -1203,6 +1362,22 @@ cv.addEventListener('pointermove', e => {
   const p = toWorld(e);
   switch (drag.mode) {
     case 'pan': S.view.x = drag.vx + e.clientX - drag.sx; S.view.y = drag.vy + e.clientY - drag.sy; render(); break;
+    case 'crop': {
+      if (!cropEdit) break;
+      const o = cropEdit.obj, img = imgCache.get(o.src);
+      if (!img || !img.naturalWidth) break;
+      const nw = img.naturalWidth, nh = img.naturalHeight;
+      const scaleX = o.w / nw, scaleY = o.h / nh;
+      const { h: ch, origCrop } = drag;
+      const srcX = (p.x - o.x) / scaleX, srcY = (p.y - o.y) / scaleY;
+      let L = origCrop.x, T = origCrop.y, R = origCrop.x + origCrop.w, B = origCrop.y + origCrop.h;
+      if (ch.includes('w')) L = Math.max(0, Math.min(srcX, R - 10));
+      if (ch.includes('e')) R = Math.min(nw, Math.max(srcX, L + 10));
+      if (ch.includes('n')) T = Math.max(0, Math.min(srcY, B - 10));
+      if (ch.includes('s')) B = Math.min(nh, Math.max(srcY, T + 10));
+      cropEdit.x = L; cropEdit.y = T; cropEdit.w = R - L; cropEdit.h = B - T;
+      render(); break;
+    }
     case 'draw': {
       const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
       const minD = 1.2 / S.view.k;
@@ -1281,6 +1456,9 @@ function updateConnectedArrows(movedObjs) {
 }
 function endDrag() {
   if (!drag) return;
+  if (drag.mode === 'crop') {
+    drag = null; render(); return;
+  }
   if (drag.mode === 'connect') {
     if (draft && Math.hypot(draft.x2 - draft.x1, draft.y2 - draft.y1) > 8) {
       if (drag.src) draft.srcConn = { obj: drag.src, port: drag.srcPort };
@@ -1383,6 +1561,11 @@ addEventListener('keydown', e => {
   if (!$('#about').hidden) { if (e.key === 'Escape') closeAbout(); return; }
   if (!$('#help').hidden) { if (e.key === 'Escape' || e.key === '?' || (e.code === 'Slash' && e.shiftKey)) closeHelp(); return; }
   if (e.key === '\\') { e.preventDefault(); toggleToolbar(); return; }
+  if (cropEdit) {
+    if (e.key === 'Enter') { e.preventDefault(); commitCrop(); return; }
+    if (e.key === 'Escape') { cancelCrop(); return; }
+    return;
+  }
   if (document.body.classList.contains('readonly')) {
     if (e.key === 'Escape') { setReadonly(false); return; }
     if (e.key === 'Tab') { e.preventDefault(); togglePresent(); return; }
@@ -1413,6 +1596,7 @@ addEventListener('keydown', e => {
   if (e.key === '[') { setSize(curIdx() - 1); return; }
   if (e.key === ']') { setSize(curIdx() + 1); return; }
   if (/^[1-6]$/.test(e.key)) { setColor(SWATCHES[+e.key - 1]); return; }
+  if (k === 'k') { if (S.sel && S.sel.type === 'image') startCrop(); return; }
   if (KEYMAP[k]) setTool(KEYMAP[k]);
 });
 addEventListener('keyup', e => {
@@ -1640,6 +1824,7 @@ async function loadFile(file) {
     }
     S.bg = S.pages[S.pageIdx].bg || '#ffffff';
     S.objects = S.pages[S.pageIdx].objects || [];
+    S.pages.forEach(pg => (pg.objects || []).forEach(o => { if (o.type === 'image') loadImg(o.src); }));
     S.sel = null; S.selSet = new Set();
     S.name = data.name || file.name.replace(/\.(inkboard\.json|json|png)$/i, '');
     $('#name').value = S.name; hist.u = []; hist.r = []; renderPageBar(); syncUI(); changed(); fitView();
@@ -1660,7 +1845,24 @@ async function openFile() {
 $('#file').addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); e.target.value = ''; });
 addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dragover'); });
 addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('dragover'); });
-addEventListener('drop', e => { e.preventDefault(); document.body.classList.remove('dragover'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+addEventListener('drop', e => {
+  e.preventDefault(); document.body.classList.remove('dragover');
+  const file = e.dataTransfer.files[0]; if (!file) return;
+  if (file.type.startsWith('image/')) {
+    const pt = toWorld({ clientX: e.clientX, clientY: e.clientY });
+    readAsDataURL(file).then(src => addImageFromSrc(src, pt));
+  } else { loadFile(file); }
+});
+document.addEventListener('paste', async e => {
+  if (editing || document.body.classList.contains('readonly')) return;
+  for (const item of (e.clipboardData?.items || [])) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      const src = await readAsDataURL(item.getAsFile());
+      addImageFromSrc(src); break;
+    }
+  }
+});
 
 /* ---------- templates ---------- */
 function viewCenter() {
@@ -1706,6 +1908,8 @@ document.addEventListener('click', e => { if (!e.target.closest('.savewrap')) cl
 $('#tmpBtn').addEventListener('click', e => { e.stopPropagation(); const tm = $('#tmpMenu'), h = tm.hidden; closeMenu(); tm.hidden = !h; });
 $('#tmplKanban').addEventListener('click', () => { closeMenu(); stampTemplate(makeKanban()); });
 $('#tmplMindmap').addEventListener('click', () => { closeMenu(); stampTemplate(makeMindmap()); });
+$('#cropBtn').addEventListener('click', () => startCrop());
+$('#uncropBtn').addEventListener('click', () => { if (S.sel && S.sel.type === 'image') { pushUndo(); delete S.sel.crop; changed(); } });
 $('#openBtn').addEventListener('click', openFile);
 $('#newBtn').addEventListener('click', newBoard);
 $('#themeBtn').addEventListener('click', () => {
@@ -1765,6 +1969,7 @@ try {
   }
 } catch (e) {}
 if (!S.pages) S.pages = [{ id: 'pg-0', name: 'Page 1', bg: S.bg, objects: S.objects }];
+S.pages.forEach(pg => (pg.objects || []).forEach(o => { if (o.type === 'image') loadImg(o.src); }));
 if (!hadSaved && document.body.classList.contains('dark')) S.bg = CHARCOAL;
 $('#name').value = S.name;
 cv.style.cursor = CURSORS[S.tool];
