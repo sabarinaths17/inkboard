@@ -159,7 +159,10 @@ Templates panel is in the topright bar ("Templates" chip). Two templates availab
 - Rect shows 4 connection ports (N/E/S/W midpoints) when selected with the select tool; drag from a port to create an arrow
 - Dropping an arrow on empty space auto-spawns a new linked node in the arrow's travel direction; new node's facing port aligns with the arrow tip
 - `makeMindmap(cx?, cy?)` accepts optional world-coordinate center; defaults to `viewCenter()`
-- **Auto-fit on edit**: when the text object in an `mm-` group is edited, `commit()` in `startText` measures the new text width via `mctx`, updates `rect.w` (min 100px, +36px padding), re-centers `rect.x` around the original horizontal center, and re-centers `o.x` to match; supports multi-line (uses max line width)
+- **Auto-fit on edit**: when the text object in an `mm-` group is edited, `commit()` in `startText` measures the new text width via `mctx`, updates `rect.w` (min 100px, +36px padding), re-centers `rect.x` around the original horizontal center, and re-centers `o.x/o.y` to match; supports multi-line (uses max line width)
+- **Text rendering in rect**: `drawMmText(c, o, rect)` renders the text centered within the rect bounds — truncates each line to available width (`rect.w - 2*14px` padding) appending ` ~...` on overflow, and truncates excess lines with ` ~...` on the last visible line; total height is centered vertically in the rect
+- **Double-click to edit**: double-clicking the rect body (not just the text object) in select mode finds the linked text object and opens it for editing via `startText`
+- **Resize sync**: during rect resize (`case 'resize'` in pointermove), linked text `o.x/o.y` is re-synced to `rect.x + 14` / `rect.y + (rect.h - o.size) / 2` so the edit overlay stays correctly positioned
 
 ### Stamp logic (`stampTemplate(objs)`)
 - Pushes undo snapshot, adds all objects, selects them all via `selSet`, switches to select tool, shows toast.
