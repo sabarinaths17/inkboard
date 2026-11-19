@@ -7,9 +7,10 @@ Single-file whiteboard canvas app: `inkboard.html`. All logic, styles, and marku
 - **State**: `const S = { objects, view, tool, color, sz, bg, sel, selSet, name, pages, pageIdx }` — single global state object
 - **Rendering**: canvas-based, `paint()` → `drawObj()` per object; selection overlays drawn after
 - **History**: simple array-based undo/redo via `pushUndo()` / `hist.u` / `hist.r`
-- **Persistence**: auto-save to `localStorage` on every change (saves all pages); file system API (`dirHandle`) for folder saves; three export formats:
+- **Persistence**: auto-save to `localStorage` on every change (saves all pages); file system API (`dirHandle`) for folder saves; four export formats:
   - **PNG** — visual export that also embeds the full board JSON (all pages) invisibly in the file metadata; re-importing restores a fully editable multi-page board; fills `S.bg || WHITE` as background
   - **JPEG** — `toJpeg()` — smaller file, always solid background (`S.bg || WHITE`), no embedded JSON (not re-importable); quality 0.92
+  - **SVG** — `toSvg()` / `svgObj(o, flipInk)` — always exports with a white background regardless of board theme; in dark mode (`isDark(S.bg)`), near-white ink (`INK_LIGHT = '#f5f5f7'`) is flipped to `INK_DARK = '#1b1b1f'` so strokes are visible on the white bg; colored objects are unchanged
   - **`.inkboard.json`** — JSON snapshot of `{ app, v, name, pages, pageIdx }`; two save options in the Save menu:
     - **All pages** — full board including every page
     - **Current page only** — single-page snapshot wrapped in the same format (`pages` array with one entry, `pageIdx: 0`)
@@ -276,9 +277,10 @@ Three view modes in addition to the existing Tab presenter mode:
 
 ## Topright bar
 
-Buttons left-to-right: theme toggle, **View**, **Teach**, **ℹ** (About), **Templates**, **Save**.
+Buttons left-to-right: theme toggle, **View**, **Teach**, **ℹ** (About), **Templates**, **Open**, **New**, **Save**.
 - Folder chooser button was removed — `dirHandle` and `pickFolder()` are still used internally for folder saves but have no UI entry point; the picker triggers automatically the first time a folder save is attempted
 - View and Teach buttons change their label to "Exit View" / "Exit Teach" when active (`setReadonly` / `setTeach` update `btn.textContent`)
+- **New** and **Save** buttons each have a `.savewrap` dropdown; the ▾ chevron SVG inside them uses `style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"` so it adapts to light/dark theme via `currentColor` (plain `<path>` with no stroke defaults to black fill and disappears in dark mode)
 
 ## Color system
 
