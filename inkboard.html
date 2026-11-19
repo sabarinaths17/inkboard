@@ -1774,10 +1774,11 @@ function toast(m) {
 
 /* ---------- export ---------- */
 function svgObj(o) {
-  const st = `fill="none" stroke="${o.color}" stroke-width="${o.width}" stroke-linecap="round" stroke-linejoin="round"`;
+  const col = resolveColor(o.color);
+  const st = `fill="none" stroke="${col}" stroke-width="${o.width}" stroke-linecap="round" stroke-linejoin="round"`;
   switch (o.type) {
     case 'pen': return o.pts.length === 1
-      ? `<circle cx="${r2(o.pts[0][0])}" cy="${r2(o.pts[0][1])}" r="${o.width / 2}" fill="${o.color}"/>`
+      ? `<circle cx="${r2(o.pts[0][0])}" cy="${r2(o.pts[0][1])}" r="${o.width / 2}" fill="${col}"/>`
       : `<path d="${penD(o.pts)}" ${st}/>`;
     case 'rect': return `<path d="${rectD(norm(o))}" ${st}/>`;
     case 'ellipse': { const n = norm(o); return `<ellipse cx="${r2(n.x + n.w / 2)}" cy="${r2(n.y + n.h / 2)}" rx="${r2(n.w / 2)}" ry="${r2(n.h / 2)}" ${st}/>`; }
@@ -1785,7 +1786,7 @@ function svgObj(o) {
     case 'arrow': return `<path d="${arrowD(o)}" ${st}/>`;
     case 'text': {
       const lines = o.text.split('\n');
-      return `<text x="${r2(o.x)}" y="${r2(o.y)}" font-family="${FONT}" font-size="${o.size}" font-weight="500" fill="${o.color}" dominant-baseline="hanging" xml:space="preserve">` +
+      return `<text x="${r2(o.x)}" y="${r2(o.y)}" font-family="${FONT}" font-size="${o.size}" font-weight="500" fill="${col}" dominant-baseline="hanging" xml:space="preserve">` +
         lines.map((l, i) => `<tspan x="${r2(o.x)}" dy="${i ? o.size * 1.25 : 0}">${esc(l) || ' '}</tspan>`).join('') + '</text>';
     }
   }
