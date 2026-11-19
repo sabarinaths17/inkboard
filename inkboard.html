@@ -1773,12 +1773,8 @@ function toast(m) {
 }
 
 /* ---------- export ---------- */
-function svgObj(o, darkBoard) {
-  // On dark boards objects are stored with light ink; normalise to dark so the SVG (white bg) looks right
-  const col = darkBoard && o.color === INK_LIGHT ? INK_DARK
-            : !darkBoard && o.color === INK_DARK ? INK_DARK
-            : o.color === 'ink' ? INK_DARK   // legacy fallback
-            : o.color;
+function svgObj(o) {
+  const col = o.color === 'ink' ? inkNow() : o.color;
   const st = `fill="none" stroke="${col}" stroke-width="${o.width}" stroke-linecap="round" stroke-linejoin="round"`;
   switch (o.type) {
     case 'pen': return o.pts.length === 1
@@ -1798,12 +1794,9 @@ function svgObj(o, darkBoard) {
 }
 function toSvg() {
   const b = contentBounds();
-  const darkBoard = isDark(S.bg);
-  // Always use a white/light background in SVG so it looks right in Figma, Canva and browsers
-  const svgBg = darkBoard ? WHITE : S.bg;
   const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="${r2(b.w)}" height="${r2(b.h)}" viewBox="${r2(b.x)} ${r2(b.y)} ${r2(b.w)} ${r2(b.h)}">`,
-    `<rect x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(b.w)}" height="${r2(b.h)}" fill="${svgBg}"/>`];
-  for (const o of S.objects) out.push(svgObj(o, darkBoard));
+    `<rect x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(b.w)}" height="${r2(b.h)}" fill="${S.bg || WHITE}"/>`];
+  for (const o of S.objects) out.push(svgObj(o));
   out.push('</svg>');
   return out.join('\n');
 }
