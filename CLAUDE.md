@@ -152,10 +152,11 @@ Text objects render Obsidian-style inline markdown via `drawMdText(c, o)`:
 
 ## New button (topright)
 
-`#newBtn` is a dropdown (`.savewrap` pattern) with three options:
-- **New blank page** — calls `addPage()`, stays on current page
+`#newBtn` is a dropdown (`.savewrap` pattern) with four options:
+- **New blank tab** — calls `addPage()`, stays on current page
 - **Insert image…** — triggers `#imgInput`, inserts image into current tab
 - **Open board…** — calls `openBoardInNewTab()`: opens a `.inkboard.json` or embedded-PNG board and **appends** its pages to the current board, then switches to the first newly added page; uses `#boardInput` as fallback for browsers without `showOpenFilePicker`
+- **Clear all…** — calls `clearAll()`: shows a native `confirm()` dialog, then resets to a single blank page (all tabs and content wiped, undo history cleared, bg reset to WHITE)
 
 `closeMenu()` also hides `#newMenu`.
 
@@ -263,6 +264,7 @@ Three view modes in addition to the existing Tab presenter mode:
 - On `pointerdown`: calls `teachPulse(e.clientX, e.clientY)` then sets `drag.mode = 'pan'` — click shows ripple, drag pans
 - Available in all modes including readonly (ripple fires even in readonly when laser tool is active)
 - Auto-selected when entering teach mode
+- Text pin (blue "+" hover handle) is suppressed: `updateHover` skips the text-scan loop and `paint()` skips `paintPin` entirely when `S.tool === 'laser'`
 
 ### Dock auto-hide
 - `body.dock-auto`: dock slides out of view via `transform: translateX(-50%) translateY(calc(100% + 46px))`; `z-index:15` keeps it above the page bar when visible
