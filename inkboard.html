@@ -208,9 +208,10 @@ body:not(.bar-off) #zoom{bottom:52px}
   <div class="savewrap">
     <button id="newBtn" class="txt" title="New page / open content">New <svg viewBox="0 0 12 12" width="10" height="10" style="vertical-align:-.1em"><path d="M2.5 4.5L6 8l3.5-3.5"/></svg></button>
     <div id="newMenu" class="glass menu" style="width:260px" hidden>
-      <button id="newBlankBtn"><b>New blank page</b><span>Adds a fresh tab, keeps current</span></button>
+      <button id="newBlankBtn"><b>New blank tab</b><span>Adds a fresh tab, keeps current</span></button>
       <button id="newImgBtn"><b>Insert image…</b><span>Adds image to the current page</span></button>
       <button id="newBoardBtn"><b>Open board…</b><span>Opens .inkboard.json or PNG in a new tab</span></button>
+      <button id="newClearAllBtn" style="color:#e44"><b>Clear all…</b><span>Wipe everything — all tabs and content</span></button>
     </div>
   </div>
   <input type="file" id="boardInput" accept=".png,.json,.inkboard.json" hidden>
@@ -1027,6 +1028,15 @@ function clearBoard() {
   pushUndo(); S.objects = []; S.sel = null; hoverText = null;
   if (S.pages) S.pages[S.pageIdx].objects = S.objects;
   changed(); toast('Board cleared. Ctrl+Z brings it back');
+}
+function clearAll() {
+  if (editing) editing.commit();
+  if (!confirm('Wipe everything — all tabs and content? This cannot be undone.')) return;
+  S.pages = [{ id: 'pg-' + Date.now(), name: 'Page 1', bg: WHITE, objects: [] }];
+  S.pageIdx = 0; S.objects = S.pages[0].objects; S.bg = WHITE;
+  S.sel = null; S.selSet = new Set(); hoverText = null; hist.u = []; hist.r = [];
+  setBg(WHITE); renderPageBar(); syncUI(); changed();
+  toast('Cleared everything');
 }
 const HELP = [
   ['Tools', [['V', 'Select and move'], ['P', 'Pen'], ['E', 'Eraser'], ['R', 'Box'], ['O', 'Circle'], ['A', 'Arrow'], ['L', 'Line'], ['T', 'Text'], ['H', 'Pan']]],
@@ -2098,6 +2108,7 @@ $('#newBtn').addEventListener('click', e => { e.stopPropagation(); const h = $('
 $('#newBlankBtn').addEventListener('click', () => { closeMenu(); addPage(); });
 $('#newImgBtn').addEventListener('click', () => { closeMenu(); $('#imgInput').click(); });
 $('#newBoardBtn').addEventListener('click', () => { closeMenu(); openBoardInNewTab(); });
+$('#newClearAllBtn').addEventListener('click', () => { closeMenu(); clearAll(); });
 $('#themeBtn').addEventListener('click', () => {
   const dark = !document.body.classList.contains('dark');
   setTheme(dark);
