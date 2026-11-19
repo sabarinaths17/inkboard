@@ -1773,8 +1773,9 @@ function toast(m) {
 }
 
 /* ---------- export ---------- */
-function svgObj(o) {
-  const col = o.color === 'ink' ? inkNow() : o.color;
+function svgObj(o, flipInk) {
+  let col = o.color === 'ink' ? inkNow() : o.color;
+  if (flipInk && col === INK_LIGHT) col = INK_DARK;
   const st = `fill="none" stroke="${col}" stroke-width="${o.width}" stroke-linecap="round" stroke-linejoin="round"`;
   switch (o.type) {
     case 'pen': return o.pts.length === 1
@@ -1794,9 +1795,11 @@ function svgObj(o) {
 }
 function toSvg() {
   const b = contentBounds();
+  const dark = isDark(S.bg);
+  const svgBg = dark ? WHITE : (S.bg || WHITE);
   const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="${r2(b.w)}" height="${r2(b.h)}" viewBox="${r2(b.x)} ${r2(b.y)} ${r2(b.w)} ${r2(b.h)}">`,
-    `<rect x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(b.w)}" height="${r2(b.h)}" fill="${S.bg || WHITE}"/>`];
-  for (const o of S.objects) out.push(svgObj(o));
+    `<rect x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(b.w)}" height="${r2(b.h)}" fill="${svgBg}"/>`];
+  for (const o of S.objects) out.push(svgObj(o, dark));
   out.push('</svg>');
   return out.join('\n');
 }
